@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Trophy, Users, RotateCw, Plus, Minus, ChevronLeft, Home, History, Play,
-  Wifi, WifiOff, AlertTriangle, Edit3, Check, X, CheckCircle2, Clock,
+  Wifi, WifiOff, AlertTriangle, Edit3, Check, X, CheckCircle2, Clock, Trash2,
 } from 'lucide-react';
 import {
   isConfigured, ensureAuth, onAuthChange,
   createMatch, getMatch, listMatchesByIds,
   addPoint as apiAddPoint, undoPoint as apiUndoPoint, subtractPoint as apiSubtractPoint,
-  rotatePositions, updateLineup, updateRoster, finishMatch, reopenMatch,
+  rotatePositions, updateLineup, updateRoster, finishMatch, reopenMatch, deleteMatch,
   subscribeToMatch,
 } from './api.js';
-import { trackVisited, getVisitedIds } from './storage.js';
+import { trackVisited, getVisitedIds, forgetVisited } from './storage.js';
 import { LIMITS } from './config.js';
 import { FeedbackButton } from './FeedbackButton.jsx';
 import { ShareButton } from './ShareButton.jsx';
@@ -97,7 +97,7 @@ export default function App() {
         {route.view === 'home' && <HomeView userId={userId} />}
         {route.view === 'setup' && <SetupView userId={userId} />}
         {route.view === 'match' && <MatchView matchId={route.id} userId={userId} />}
-        {route.view === 'history' && <HistoryView />}
+        {route.view === 'history' && <HistoryView userId={userId} />}
       </div>
     </div>
   );
@@ -153,10 +153,30 @@ function Toast({ message, kind = 'info', onClose }) {
 function HomeView({ userId }) {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(null); // {match}
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     listMatchesByIds(getVisitedIds()).then((m) => { setMatches(m); setLoading(false); });
   }, [userId]);
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    const match = confirmDelete.match;
+    const isOwner = match.createdBy === userId;
+    setConfirmDelete(null);
+    try {
+      if (isOwner) {
+        await deleteMatch(match.id);
+      }
+      forgetVisited(match.id);
+      setMatches((prev) => prev.filter((m) => m.id !== match.id));
+      setToast({ message: isOwner ? 'Partido eliminado' : 'Partido quitado de tu lista', kind: 'success', key: Date.now() });
+    } catch (e) {
+      console.error(e);
+      setToast({ message: 'No se pudo eliminar', kind: 'error', key: Date.now() });
+    }
+  };
 
   const inProgress = matches.find((m) => !m.finished);
   const finished = matches.filter((m) => m.finished);
@@ -230,41 +250,75 @@ function HomeView({ userId }) {
       {!loading && finished.length > 0 && (
         <div className="mt-8">
           <h2 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3">Recientes</h2>
-          {finished.slice(0, 3).map((m) => <MatchCard key={m.id} match={m} onClick={() => navigate(`#/match/${m.id}`)} />)}
+          {finished.slice(0, 3).map((m) => (
+            <MatchCard
+              key={m.id} match={m} userId={userId}
+              onClick={() => navigate(`#/match/${m.id}`)}
+              onDelete={(match) => setConfirmDelete({ match })}
+            />
+          ))}
         </div>
       )}
 
       <FeedbackButton />
       <VersionFooter />
+
+      {toast && <Toast key={toast.key} message={toast.message} kind={toast.kind} onClose={() => setToast(null)} />}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="¿Eliminar este partido?"
+          message={
+            confirmDelete.match.createdBy === userId
+              ? 'Tú creaste este partido. Se borrará del servidor y desaparecerá también para el resto de padres que tengan el enlace. No se puede deshacer.'
+              : 'Lo quitará solo de tu lista. El partido seguirá existiendo para los demás padres que lo creó.'
+          }
+          confirmText="Sí, eliminar"
+          variant="danger"
+          onConfirm={handleDelete}
+          onClose={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 }
 
-function MatchCard({ match, onClick }) {
+function MatchCard({ match, userId, onClick, onDelete }) {
   const setsA = match.sets.filter((s) => s.a > s.b).length;
   const setsB = match.sets.filter((s) => s.b > s.a).length;
   const wonA = match.winner === 'A';
   const wonB = match.winner === 'B';
   return (
-    <button onClick={onClick} className="w-full text-left p-4 bg-white rounded-2xl mb-2 border border-slate-200 shadow-card hover:shadow-card-md transition">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className={`font-semibold truncate ${wonA ? 'text-brand-green' : 'text-slate-900'}`}>{match.teamA}</span>
-        <span className={`font-bold text-xl tabular-nums ${wonA ? 'text-brand-green' : 'text-slate-400'}`}>{setsA}</span>
-      </div>
-      <div className="flex items-center justify-between">
-        <span className={`truncate ${wonB ? 'text-brand-blue font-semibold' : 'text-slate-700'}`}>{match.teamB}</span>
-        <span className={`font-bold text-xl tabular-nums ${wonB ? 'text-brand-blue' : 'text-slate-400'}`}>{setsB}</span>
-      </div>
-      <div className="text-xs text-slate-500 mt-2 flex items-center gap-2 font-normal">
-        {new Date(match.startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-        {!match.finished && (
-          <span className="text-red-500 font-semibold flex items-center gap-1">
-            <span className="w-1.5 h-1.5 bg-red-500 rounded-full pulse-live" /> EN VIVO
-          </span>
-        )}
-        {match.location && <span className="text-slate-400">· {match.location}</span>}
-      </div>
-    </button>
+    <div className="w-full bg-white rounded-2xl mb-2 border border-slate-200 shadow-card hover:shadow-card-md transition flex items-stretch">
+      <button onClick={onClick} className="flex-1 text-left p-4 min-w-0">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className={`font-semibold truncate ${wonA ? 'text-brand-green' : 'text-slate-900'}`}>{match.teamA}</span>
+          <span className={`font-bold text-xl tabular-nums ml-2 flex-shrink-0 ${wonA ? 'text-brand-green' : 'text-slate-400'}`}>{setsA}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className={`truncate ${wonB ? 'text-brand-blue font-semibold' : 'text-slate-700'}`}>{match.teamB}</span>
+          <span className={`font-bold text-xl tabular-nums ml-2 flex-shrink-0 ${wonB ? 'text-brand-blue' : 'text-slate-400'}`}>{setsB}</span>
+        </div>
+        <div className="text-xs text-slate-500 mt-2 flex items-center gap-2 font-normal">
+          {new Date(match.startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+          {!match.finished && (
+            <span className="text-red-500 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-red-500 rounded-full pulse-live" /> EN VIVO
+            </span>
+          )}
+          {match.location && <span className="text-slate-400 truncate">· {match.location}</span>}
+        </div>
+      </button>
+      {onDelete && (
+        <button
+          onClick={() => onDelete(match)}
+          aria-label="Eliminar partido"
+          className="flex-shrink-0 px-3 my-3 mr-2 ml-1 border-l border-slate-100 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition flex items-center justify-center"
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -981,12 +1035,34 @@ function RosterModal({ positions, bench, onSave, onClose }) {
 }
 
 // ============ HISTORY ============
-function HistoryView() {
+function HistoryView({ userId }) {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [toast, setToast] = useState(null);
+
   useEffect(() => {
     listMatchesByIds(getVisitedIds()).then((m) => { setMatches(m); setLoading(false); });
   }, []);
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    const match = confirmDelete.match;
+    const isOwner = match.createdBy === userId;
+    setConfirmDelete(null);
+    try {
+      if (isOwner) {
+        await deleteMatch(match.id);
+      }
+      forgetVisited(match.id);
+      setMatches((prev) => prev.filter((m) => m.id !== match.id));
+      setToast({ message: isOwner ? 'Partido eliminado' : 'Partido quitado de tu lista', kind: 'success', key: Date.now() });
+    } catch (e) {
+      console.error(e);
+      setToast({ message: 'No se pudo eliminar', kind: 'error', key: Date.now() });
+    }
+  };
+
   const inProgress = matches.filter((m) => !m.finished);
   const finished = matches.filter((m) => m.finished);
   return (
@@ -1012,18 +1088,47 @@ function HistoryView() {
               <h2 className="text-xs uppercase tracking-wider text-red-500 font-bold mb-3 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full pulse-live" /> En vivo
               </h2>
-              {inProgress.map((m) => <MatchCard key={m.id} match={m} onClick={() => navigate(`#/match/${m.id}`)} />)}
+              {inProgress.map((m) => (
+                <MatchCard
+                  key={m.id} match={m} userId={userId}
+                  onClick={() => navigate(`#/match/${m.id}`)}
+                  onDelete={(match) => setConfirmDelete({ match })}
+                />
+              ))}
             </div>
           )}
           {finished.length > 0 && (
             <div>
               <h2 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3">Finalizados</h2>
-              {finished.map((m) => <MatchCard key={m.id} match={m} onClick={() => navigate(`#/match/${m.id}`)} />)}
+              {finished.map((m) => (
+                <MatchCard
+                  key={m.id} match={m} userId={userId}
+                  onClick={() => navigate(`#/match/${m.id}`)}
+                  onDelete={(match) => setConfirmDelete({ match })}
+                />
+              ))}
             </div>
           )}
         </>
       )}
       <VersionFooter />
+
+      {toast && <Toast key={toast.key} message={toast.message} kind={toast.kind} onClose={() => setToast(null)} />}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="¿Eliminar este partido?"
+          message={
+            confirmDelete.match.createdBy === userId
+              ? 'Tú creaste este partido. Se borrará del servidor y desaparecerá también para el resto de padres que tengan el enlace. No se puede deshacer.'
+              : 'Lo quitará solo de tu lista. El partido seguirá existiendo para los demás padres y para quien lo creó.'
+          }
+          confirmText="Sí, eliminar"
+          variant="danger"
+          onConfirm={handleDelete}
+          onClose={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 }

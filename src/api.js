@@ -178,6 +178,16 @@ export async function finishMatch(matchId) {
   return fromRow(data);
 }
 
+// Elimina un partido del servidor (RLS: solo el creador puede).
+// Si no es el creador, Supabase devolverá vacío sin error.
+// Para garantizar que se borró, comparamos data.length.
+export async function deleteMatch(matchId) {
+  const { data, error } = await supabase
+    .from('matches').delete().eq('id', matchId).select();
+  if (error) throw error;
+  return Array.isArray(data) && data.length > 0;
+}
+
 // ============ REALTIME ============
 export function subscribeToMatch(id, callback) {
   if (!supabase) return () => {};
