@@ -14,6 +14,7 @@ import { trackVisited, getVisitedIds } from './storage.js';
 import { LIMITS } from './config.js';
 import { FeedbackButton } from './FeedbackButton.jsx';
 import { ShareButton } from './ShareButton.jsx';
+import { VersionFooter } from './VersionFooter.jsx';
 
 // Etiquetas de las 4 posiciones (P1=índice 0, P2=índice 1, etc.)
 const POSITION_LABELS = ['Saque', 'Izquierda', 'Centro', 'Derecha'];
@@ -234,6 +235,7 @@ function HomeView({ userId }) {
       )}
 
       <FeedbackButton />
+      <VersionFooter />
     </div>
   );
 }
@@ -942,6 +944,7 @@ function HistoryView() {
           )}
         </>
       )}
+      <VersionFooter />
     </div>
   );
 }
