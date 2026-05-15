@@ -165,7 +165,7 @@ function HomeView({ userId }) {
       {/* Header con logo */}
       <div className="flex items-center justify-between mb-2">
         <img src="/school-logo.png" alt="Santa Ana y San Rafael" className="h-12 w-auto" />
-        <span className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">VolleyTrack</span>
+        <span className="text-[15px] uppercase tracking-widest text-slate-400 font-semibold">VolleyTrack</span>
       </div>
 
       <h1 className="text-3xl font-bold mt-6 mb-1 text-slate-900">Hola 👋</h1>
@@ -343,7 +343,7 @@ function SetupView({ userId }) {
             <div key={i} className="flex items-center gap-2">
               <div className="w-14 h-14 rounded-xl bg-brand-green-soft flex flex-col items-center justify-center font-bold text-brand-green flex-shrink-0">
                 <div className="text-xs leading-none">{POSITION_SHORT[i]}</div>
-                <div className="text-[9px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
+                <div className="text-[14px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
               </div>
               <input value={p} onChange={(e) => { const np = [...starters]; np[i] = e.target.value; setStarters(np); }} maxLength={LIMITS.playerNameMax} placeholder={`Jugadora ${POSITION_LABELS[i].toLowerCase()}`} className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
             </div>
@@ -522,12 +522,12 @@ function MatchView({ matchId }) {
             <ChevronLeft size={18} /> Inicio
           </button>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-500 uppercase tracking-wider font-bold">
+            <span className="text-[16px] text-slate-500 uppercase tracking-wider font-bold">
               Set {match.currentSet.number} · {match.format === 'bo5' ? 'BO5' : 'BO3'}
             </span>
             {syncing && <Wifi size={12} className="text-brand-green pulse-live" />}
             {!match.finished && (
-              <span className="flex items-center gap-1 text-[10px] text-red-500 font-bold">
+              <span className="flex items-center gap-1 text-[15px] text-red-500 font-bold">
                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full pulse-live" /> LIVE
               </span>
             )}
@@ -578,7 +578,7 @@ function TeamHeader({ name, sets, serving, color }) {
         <span className="font-semibold text-slate-900 truncate text-sm">{name}</span>
       </div>
       <div className={`text-3xl font-bold tabular-nums ${accentText}`}>{sets}</div>
-      <div className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">sets</div>
+      <div className="text-[15px] text-slate-500 uppercase tracking-wide font-semibold">sets</div>
     </div>
   );
 }
@@ -588,7 +588,7 @@ function MatchTimes({ match }) {
   const end = match.endedAt || now;
   const dur = formatDuration(end - match.startedAt);
   return (
-    <div className="text-[10px] text-slate-500 mt-2.5 flex items-center gap-1.5 justify-center font-medium">
+    <div className="text-[15px] text-slate-500 mt-2.5 flex items-center gap-1.5 justify-center font-medium">
       <Clock size={11} />
       <span>Inicio <span className="text-slate-700 font-semibold tabular-nums">{formatHHMM(match.startedAt)}</span></span>
       {match.endedAt && (
@@ -618,7 +618,7 @@ function ScoreTab({ match, onPoint, onEnd }) {
             <ScoreButton name={match.teamA} score={match.currentSet.a} onAdd={() => onPoint('A')} color="green" />
             <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} color="blue" />
           </div>
-          <p className="text-[11px] text-slate-500 text-center mb-4 px-4 leading-relaxed">
+          <p className="text-[16px] text-slate-500 text-center mb-4 px-4 leading-relaxed">
             Si varios padres pulsan el mismo punto en menos de 10s, solo cuenta una vez.
           </p>
           <button onClick={onEnd} className="w-full p-3 bg-white border border-slate-200 text-slate-500 rounded-xl text-sm font-medium shadow-card">
@@ -696,7 +696,7 @@ function ScoreButton({ name, score, onAdd, color }) {
       className={`aspect-[3/4] bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col justify-between shadow-card-md ${bgActive} active:text-white transition`}
     >
       <div className="text-left">
-        <div className="text-[11px] text-slate-500 uppercase tracking-wider truncate font-bold">{name}</div>
+        <div className="text-[16px] text-slate-500 uppercase tracking-wider truncate font-bold">{name}</div>
       </div>
       <div className={`text-7xl font-bold text-center my-2 font-mono tabular-nums ${accent}`}>{score}</div>
       <div className={`flex items-center justify-center gap-1 ${accent} font-bold`}>
@@ -715,7 +715,7 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
   // P1 (índice 0) = saque, P2 (1) = izquierda, P3 (2) = centro, P4 (3) = derecha
   return (
     <div className="px-5 py-6 bg-slate-50">
-      <div className="text-[11px] uppercase tracking-widest text-slate-400 mb-2 text-center font-bold">Red ▲</div>
+      <div className="text-[16px] uppercase tracking-widest text-slate-400 mb-2 text-center font-bold">Red ▲</div>
       <div className={`bg-gradient-to-b from-brand-green-soft to-white border border-brand-green/20 rounded-3xl p-5 mb-6 shadow-card ${flash ? 'animate-rotation-flash' : ''}`}>
         <div className="grid grid-cols-3 gap-2">
           {/* Fila 1: solo P3 centro */}
@@ -724,7 +724,7 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
           <div />
           {/* Fila 2: P2 izquierda, vacío, P4 derecha */}
           <CourtCell player={pos[1]} index={1} />
-          <div className="flex items-center justify-center text-[10px] text-slate-400 font-medium">CANCHA</div>
+          <div className="flex items-center justify-center text-[15px] text-slate-400 font-medium">CANCHA</div>
           <CourtCell player={pos[3]} index={3} />
           {/* Fila 3: solo P1 saque */}
           <div />
@@ -752,13 +752,13 @@ function CourtCell({ player, index, isServer = false }) {
   const label = POSITION_LABELS[index];
   return (
     <div className={`aspect-square rounded-2xl flex flex-col items-center justify-center p-2 shadow-card transition ${isServer ? 'bg-gradient-to-br from-brand-green to-brand-blue text-white' : 'bg-white border border-slate-200'}`}>
-      <div className={`text-[10px] font-mono mb-1 font-bold ${isServer ? 'text-white/85' : 'text-slate-400'}`}>
+      <div className={`text-[15px] font-mono mb-1 font-bold ${isServer ? 'text-white/85' : 'text-slate-400'}`}>
         {POSITION_SHORT[index]}{isServer && ' 🏐'}
       </div>
       <div className={`text-sm font-bold text-center leading-tight truncate w-full ${isServer ? 'text-white' : 'text-slate-900'}`}>
         {player?.name || '—'}
       </div>
-      <div className={`text-[9px] font-medium mt-0.5 ${isServer ? 'text-white/70' : 'text-slate-400'}`}>
+      <div className={`text-[14px] font-medium mt-0.5 ${isServer ? 'text-white/70' : 'text-slate-400'}`}>
         {label}
       </div>
     </div>
@@ -843,7 +843,7 @@ function RosterModal({ positions, bench, onSave, onClose }) {
                 <div key={i} className="flex items-center gap-2">
                   <div className="w-14 h-14 rounded-xl bg-brand-green-soft flex flex-col items-center justify-center font-bold text-brand-green flex-shrink-0">
                     <div className="text-xs leading-none">{POSITION_SHORT[i]}</div>
-                    <div className="text-[9px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
+                    <div className="text-[14px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
                   </div>
                   {renamingIdx === i ? (
                     <input

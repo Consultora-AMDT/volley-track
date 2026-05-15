@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lightbulb, X, MessageCircle, Mail } from 'lucide-react';
+import { Lightbulb, X, Mail } from 'lucide-react';
 import { FEEDBACK, APP_VERSION, LIMITS } from './config.js';
 
 export function FeedbackButton() {
@@ -29,13 +29,6 @@ function FeedbackModal({ onClose }) {
       name.trim() ? `De: ${name.trim()}` : null,
       `v${APP_VERSION}`,
     ].filter(Boolean).join('\n');
-  };
-
-  const sendWhatsApp = () => {
-    if (!text.trim()) return;
-    const url = `https://wa.me/${encodeURIComponent(FEEDBACK.whatsapp)}?text=${encodeURIComponent(buildMessage())}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-    onClose();
   };
 
   const sendEmail = () => {
@@ -72,22 +65,14 @@ function FeedbackModal({ onClose }) {
         />
         <div className="text-xs text-slate-400 mt-1 mb-4 text-right">{text.length}/{LIMITS.feedbackMax}</div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={sendWhatsApp} disabled={!text.trim()}
-            className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white disabled:bg-slate-200 disabled:text-slate-400 rounded-xl font-semibold flex items-center justify-center gap-2 transition"
-          >
-            <MessageCircle size={18} /> WhatsApp
-          </button>
-          <button
-            onClick={sendEmail} disabled={!text.trim()}
-            className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-50 rounded-xl font-semibold flex items-center justify-center gap-2 transition"
-          >
-            <Mail size={18} /> Email
-          </button>
-        </div>
+        <button
+          onClick={sendEmail} disabled={!text.trim()}
+          className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-blue text-white disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500 rounded-2xl font-semibold flex items-center justify-center gap-2 transition shadow-card-md"
+        >
+          <Mail size={18} /> Enviar por email
+        </button>
 
-        <p className="text-[11px] text-slate-400 text-center mt-4">
+        <p className="text-[16px] text-slate-400 text-center mt-4">
           Tu sugerencia se envía directamente al desarrollador.
         </p>
       </div>

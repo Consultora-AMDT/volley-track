@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Base de tipografía aumentada para legibilidad móvil
+   (sustituye al 16px default → todo lo basado en rem escala) */
+html {
+  font-size: 22px;
+}
+
 html, body, #root {
   height: 100%;
   background-color: #F5F7FA;
@@ -29,8 +35,8 @@ button:active:not(:disabled) {
   transform: scale(0.97);
 }
 
-input {
-  font-size: 16px; /* evita zoom iOS */
+input, textarea {
+  font-size: 1rem; /* escala con html, >=16px evita zoom iOS */
 }
 
 /* Scroll suave nativo */

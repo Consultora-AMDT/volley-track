@@ -64,7 +64,7 @@ export function ShareButton({ match }) {
               </button>
             </div>
 
-            <p className="text-[11px] text-slate-400 text-center">
+            <p className="text-[16px] text-slate-400 text-center">
               Cualquier padre con el enlace podrá ver y editar el partido.
             </p>
           </div>
