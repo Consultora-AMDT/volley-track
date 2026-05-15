@@ -123,11 +123,30 @@ export async function undoPoint(matchId) {
   return fromRow(data);
 }
 
+// Resta 1 punto del marcador del equipo indicado (correción de error).
+// A diferencia de undo_point, NO depende del último punto: corrige el set actual.
+export async function subtractPoint(matchId, team) {
+  const { data, error } = await supabase.rpc('subtract_point', {
+    p_match_id: matchId, p_team: team,
+  });
+  if (error) throw error;
+  return fromRow(data);
+}
+
+// Reabre un partido finalizado por error. Mantiene el marcador y los sets tal cual.
+export async function reopenMatch(matchId) {
+  const { data, error } = await supabase
+    .from('matches').update({ finished: false, winner: null, ended_at: null })
+    .eq('id', matchId).select().single();
+  if (error) throw error;
+  return fromRow(data);
+}
+
 // Rotación horaria con 4 posiciones: P4→P1, P1→P2, P2→P3, P3→P4
 // En array: [pos[3], pos[0], pos[1], pos[2]]
 export async function rotatePositions(matchId, currentPositions) {
   if (!currentPositions || currentPositions.length !== 4) {
-    throw new Error('Se esperan 4 jugadoras en cancha');
+    throw new Error('Se esperan 4 jugadoras en campo');
   }
   const rotated = [currentPositions[3], currentPositions[0], currentPositions[1], currentPositions[2]];
   const { data, error } = await supabase

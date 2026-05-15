@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Trophy, Users, RotateCw, Plus, ChevronLeft, Home, History, Play,
+  Trophy, Users, RotateCw, Plus, Minus, ChevronLeft, Home, History, Play,
   Wifi, WifiOff, AlertTriangle, Edit3, Check, X, CheckCircle2, Clock,
 } from 'lucide-react';
 import {
   isConfigured, ensureAuth, onAuthChange,
   createMatch, getMatch, listMatchesByIds,
-  addPoint as apiAddPoint, undoPoint as apiUndoPoint,
-  rotatePositions, updateLineup, updateRoster, finishMatch,
+  addPoint as apiAddPoint, undoPoint as apiUndoPoint, subtractPoint as apiSubtractPoint,
+  rotatePositions, updateLineup, updateRoster, finishMatch, reopenMatch,
   subscribeToMatch,
 } from './api.js';
 import { trackVisited, getVisitedIds } from './storage.js';
@@ -339,7 +339,7 @@ function SetupView({ userId }) {
         </div>
       </Field>
 
-      <Field label="Titulares en cancha">
+      <Field label="Titulares en campo">
         <div className="space-y-2">
           {starters.map((p, i) => (
             <div key={i} className="flex items-center gap-2">
@@ -402,6 +402,7 @@ function MatchView({ matchId }) {
   const [toast, setToast] = useState(null);
   const [editingLineup, setEditingLineup] = useState(false);
   const [rotationFlash, setRotationFlash] = useState(false);
+  const [confirmReopen, setConfirmReopen] = useState(false);
   const inflight = useRef(false);
   const prevPositionsRef = useRef(null);
   const initializedRef = useRef(false);
@@ -464,6 +465,32 @@ function MatchView({ matchId }) {
       }
     } catch (e) { console.error(e); showToast(e.message || 'Error al sumar punto', 'error'); }
     finally { inflight.current = false; setSyncing(false); }
+  };
+
+  const handleSubtract = async (team) => {
+    if (!match || match.finished) return;
+    haptic(); setSyncing(true);
+    try {
+      const m = await apiSubtractPoint(matchId, team);
+      setMatch(m);
+    } catch (e) {
+      console.error(e);
+      showToast('No se pudo restar', 'error');
+    } finally { setSyncing(false); }
+  };
+
+  const handleReopen = async () => {
+    if (!match || !match.finished) return;
+    setConfirmReopen(false);
+    setSyncing(true);
+    try {
+      const m = await reopenMatch(matchId);
+      setMatch(m);
+      showToast('Partido reabierto', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('No se pudo reabrir', 'error');
+    } finally { setSyncing(false); }
   };
 
   const handleUndo = async () => {
@@ -552,7 +579,7 @@ function MatchView({ matchId }) {
         <TabBtn active={tab === 'rotation'} onClick={() => setTab('rotation')}><Users size={16} /> Rotación</TabBtn>
       </div>
 
-      {tab === 'score' && <ScoreTab match={match} onPoint={handleAddPoint} onEnd={handleEnd} />}
+      {tab === 'score' && <ScoreTab match={match} onPoint={handleAddPoint} onSubtract={handleSubtract} onReopen={() => setConfirmReopen(true)} onEnd={handleEnd} />}
       {tab === 'rotation' && <RotationTab match={match} flash={rotationFlash} onRotate={handleRotate} onEditLineup={() => setEditingLineup(true)} />}
 
       <div className="px-5 mt-2"><ShareButton match={match} /></div>
@@ -563,6 +590,17 @@ function MatchView({ matchId }) {
           bench={match.bench || []}
           onSave={handleSaveRoster}
           onClose={() => setEditingLineup(false)}
+        />
+      )}
+
+      {confirmReopen && (
+        <ConfirmModal
+          title="¿Reabrir el partido?"
+          message="Volverá a estar en juego con el marcador tal y como quedó. Si el partido ya tenía un ganador, podrás corregir los puntos con el botón 'Restar punto'."
+          confirmText="Sí, reabrir"
+          variant="primary"
+          onConfirm={handleReopen}
+          onClose={() => setConfirmReopen(false)}
         />
       )}
     </div>
@@ -609,16 +647,16 @@ function TabBtn({ active, onClick, children }) {
   return <button onClick={onClick} className={`flex-1 py-3.5 flex items-center justify-center gap-2 text-sm font-semibold transition ${active ? 'text-brand-green border-b-2 border-brand-green' : 'text-slate-400'}`}>{children}</button>;
 }
 
-function ScoreTab({ match, onPoint, onEnd }) {
+function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
   return (
     <div className="px-5 py-6 bg-slate-50">
       {match.finished ? (
-        <FinishedSummary match={match} />
+        <FinishedSummary match={match} onReopen={onReopen} />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <ScoreButton name={match.teamA} score={match.currentSet.a} onAdd={() => onPoint('A')} color="green" />
-            <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} color="blue" />
+            <ScoreButton name={match.teamA} score={match.currentSet.a} onAdd={() => onPoint('A')} onSubtract={() => onSubtract('A')} color="green" />
+            <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} onSubtract={() => onSubtract('B')} color="blue" />
           </div>
           <p className="text-[16px] text-slate-500 text-center mb-4 px-4 leading-relaxed">
             Si varios padres pulsan el mismo punto en menos de 10s, solo cuenta una vez.
@@ -655,7 +693,7 @@ function SetRow({ set: s, teamA, teamB }) {
   );
 }
 
-function FinishedSummary({ match }) {
+function FinishedSummary({ match, onReopen }) {
   const setsA = match.sets.filter((s) => s.a > s.b).length;
   const setsB = match.sets.filter((s) => s.b > s.a).length;
   const winnerName = match.winner === 'A' ? match.teamA : match.teamB;
@@ -684,27 +722,45 @@ function FinishedSummary({ match }) {
           {match.sets.map((s) => <SetRow key={s.number} set={s} teamA={match.teamA} teamB={match.teamB} />)}
         </div>
       </div>
+
+      {onReopen && (
+        <button
+          onClick={onReopen}
+          className="w-full mt-6 p-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium shadow-card flex items-center justify-center gap-2"
+        >
+          <RotateCw size={15} /> Reabrir partido
+        </button>
+      )}
     </div>
   );
 }
 
-function ScoreButton({ name, score, onAdd, color }) {
+function ScoreButton({ name, score, onAdd, onSubtract, color }) {
   const isGreen = color === 'green';
   const bgActive = isGreen ? 'active:from-brand-green active:to-brand-green-dark' : 'active:from-brand-blue active:to-brand-blue-dark';
   const accent = isGreen ? 'text-brand-green' : 'text-brand-blue';
   return (
-    <button
-      onClick={onAdd}
-      className={`aspect-[3/4] bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col justify-between shadow-card-md ${bgActive} active:text-white transition`}
-    >
-      <div className="text-left">
-        <div className="text-[16px] text-slate-500 uppercase tracking-wider truncate font-bold">{name}</div>
-      </div>
-      <div className={`text-7xl font-bold text-center my-2 font-mono tabular-nums ${accent}`}>{score}</div>
-      <div className={`flex items-center justify-center gap-1 ${accent} font-bold`}>
-        <Plus size={18} /> <span className="text-sm">PUNTO</span>
-      </div>
-    </button>
+    <div className="rounded-2xl overflow-hidden shadow-card-md flex flex-col">
+      <button
+        onClick={onAdd}
+        className={`aspect-[3/4] bg-gradient-to-br from-white to-slate-50 border border-slate-200 border-b-0 p-4 flex flex-col justify-between ${bgActive} active:text-white transition`}
+      >
+        <div className="text-left">
+          <div className="text-[16px] text-slate-500 uppercase tracking-wider truncate font-bold">{name}</div>
+        </div>
+        <div className={`text-7xl font-bold text-center my-2 font-mono tabular-nums ${accent}`}>{score}</div>
+        <div className={`flex items-center justify-center gap-1 ${accent} font-bold`}>
+          <Plus size={18} /> <span className="text-sm">PUNTO</span>
+        </div>
+      </button>
+      <button
+        onClick={onSubtract}
+        disabled={score === 0}
+        className="w-full py-2.5 bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-30 text-xs font-medium flex items-center justify-center gap-1 border border-t-0 border-slate-200 rounded-b-2xl transition"
+      >
+        <Minus size={13} /> Restar punto
+      </button>
+    </div>
   );
 }
 
@@ -726,7 +782,7 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
           <div />
           {/* Fila 2: P2 izquierda, vacío, P4 derecha */}
           <CourtCell player={pos[1]} index={1} />
-          <div className="flex items-center justify-center text-[15px] text-slate-400 font-medium">CANCHA</div>
+          <div className="flex items-center justify-center text-[15px] text-slate-400 font-medium">CAMPO</div>
           <CourtCell player={pos[3]} index={3} />
           {/* Fila 3: solo P1 saque */}
           <div />
@@ -762,6 +818,29 @@ function CourtCell({ player, index, isServer = false }) {
       </div>
       <div className={`text-[14px] font-medium mt-0.5 ${isServer ? 'text-white/70' : 'text-slate-400'}`}>
         {label}
+      </div>
+    </div>
+  );
+}
+
+// ============ MODAL CONFIRMACIÓN genérico ============
+function ConfirmModal({ title, message, confirmText, cancelText = 'Cancelar', variant = 'primary', onConfirm, onClose }) {
+  const confirmClass = variant === 'danger'
+    ? 'bg-red-500 hover:bg-red-600'
+    : 'bg-gradient-to-r from-brand-green to-brand-blue';
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl p-5 w-full max-w-md shadow-card-lg animate-in" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold mb-2 text-slate-900">{title}</h3>
+        <p className="text-sm text-slate-600 mb-5 leading-relaxed">{message}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={onClose} className="p-3 bg-slate-100 text-slate-700 rounded-xl font-medium">
+            {cancelText}
+          </button>
+          <button onClick={onConfirm} className={`p-3 text-white rounded-xl font-semibold shadow-card ${confirmClass}`}>
+            {confirmText}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -837,9 +916,9 @@ function RosterModal({ positions, bench, onSave, onClose }) {
             <button onClick={() => setSwapping(null)} className="w-full p-3 bg-slate-100 text-slate-700 rounded-xl font-medium">Cancelar</button>
           </>
         ) : (
-          // Vista normal: cancha + banquillo
+          // Vista normal: campo + banquillo
           <>
-            <h4 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2">En cancha (4)</h4>
+            <h4 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2">En campo (4)</h4>
             <div className="space-y-2 mb-5">
               {court.map((p, i) => (
                 <div key={i} className="flex items-center gap-2">

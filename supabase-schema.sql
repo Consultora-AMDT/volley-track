@@ -262,6 +262,53 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.undo_point(UUID) TO authenticated, anon;
 
+-- ============ FUNCIÓN subtract_point ============
+-- Resta 1 punto del marcador del equipo indicado (corrección de error humano).
+-- No depende del "último punto": permite corregir aunque haya pasado más tiempo
+-- o se hayan anotado puntos para el otro equipo después.
+CREATE OR REPLACE FUNCTION public.subtract_point(p_match_id UUID, p_team TEXT)
+RETURNS public.matches
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  m   public.matches;
+  cs  JSONB;
+  a   INT;
+  b   INT;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+  IF p_team NOT IN ('A', 'B') THEN
+    RAISE EXCEPTION 'Invalid team';
+  END IF;
+
+  SELECT * INTO m FROM public.matches WHERE id = p_match_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Match not found'; END IF;
+
+  cs := m.current_set;
+  a := (cs->>'a')::INT;
+  b := (cs->>'b')::INT;
+
+  IF p_team = 'A' AND a > 0 THEN
+    a := a - 1;
+  ELSIF p_team = 'B' AND b > 0 THEN
+    b := b - 1;
+  ELSE
+    RETURN m;
+  END IF;
+
+  UPDATE public.matches SET
+    current_set = jsonb_build_object('a', a, 'b', b, 'number', (cs->>'number')::INT)
+  WHERE id = p_match_id
+  RETURNING * INTO m;
+
+  RETURN m;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.subtract_point(UUID, TEXT) TO authenticated, anon;
+
 -- ============ NOTAS ============
 -- v3 (mayo 2026):
 --   * positions: array de 4 jugadoras (antes 6)
