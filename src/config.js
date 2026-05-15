@@ -6,10 +6,10 @@ export const APP_VERSION = '1.0.0';
 export const FEEDBACK = {
   // Tu número de WhatsApp con código de país, SIN "+", espacios ni guiones
   // Ejemplo: '34600123456' para España
-  whatsapp: '34000000000',
+  whatsapp: '34610633398',
 
   // Tu email donde quieres recibir sugerencias
-  email: 'tu@email.com',
+  email: 'contacto@aunmasdificiltodavia.es',
 };
 
 // Límites de input — endurece contra abuso/quota localStorage
