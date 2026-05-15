@@ -17,7 +17,7 @@ import { ShareButton } from './ShareButton.jsx';
 import { VersionFooter } from './VersionFooter.jsx';
 
 // Etiquetas de las 4 posiciones (P1=índice 0, P2=índice 1, etc.)
-const POSITION_LABELS = ['Saque', 'Izquierda', 'Centro', 'Derecha'];
+const POSITION_LABELS = ['Saque', 'Izquierda', 'Delantera', 'Derecha'];
 const POSITION_SHORT = ['P1', 'P2', 'P3', 'P4'];
 
 // ============ ROUTER (hash) ============
