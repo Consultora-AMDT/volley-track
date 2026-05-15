@@ -1,5 +1,13 @@
--- VolleyTrack: esquema Supabase v2 (edición colaborativa + dedupe 10s)
--- Ejecuta en SQL Editor de Supabase. Es idempotente: puedes re-ejecutarlo sin problema.
+-- VolleyTrack: esquema Supabase v3 (4 jugadoras + banquillo + rotación horaria)
+-- Ejecuta en SQL Editor de Supabase. Idempotente: puedes re-ejecutarlo.
+--
+-- IMPORTANTE: este script borra los partidos existentes porque cambia el
+-- formato de positions (de 6 a 4). Si tienes partidos en producción que
+-- quieres conservar, NO lo ejecutes hasta migrar manualmente.
+
+-- ============ LIMPIEZA DE DATOS PREVIOS ============
+-- Comentar esta línea si quieres conservar partidos antiguos (no funcionarán bien).
+DELETE FROM public.matches;
 
 -- ============ TABLA ============
 CREATE TABLE IF NOT EXISTS public.matches (
@@ -25,8 +33,9 @@ CREATE TABLE IF NOT EXISTS public.matches (
   last_point_by TEXT CHECK (last_point_by IN ('A', 'B'))
 );
 
--- Migración: añadir last_point_at si no existía
+-- Migraciones (idempotentes)
 ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS last_point_at TIMESTAMPTZ;
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS bench JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS matches_created_by_idx ON public.matches (created_by);
 CREATE INDEX IF NOT EXISTS matches_started_at_idx ON public.matches (started_at DESC);
@@ -52,8 +61,6 @@ DROP POLICY IF EXISTS "matches_insert" ON public.matches;
 CREATE POLICY "matches_insert" ON public.matches FOR INSERT
   WITH CHECK (auth.uid() IS NOT NULL AND auth.uid() = created_by);
 
--- IMPORTANTE: cualquier usuario autenticado (incluido anonymous) puede editar
--- el partido. Antes era restrictivo al creador.
 DROP POLICY IF EXISTS "matches_update" ON public.matches;
 DROP POLICY IF EXISTS "matches_update_owner" ON public.matches;
 DROP POLICY IF EXISTS "matches_update_any" ON public.matches;
@@ -61,7 +68,6 @@ CREATE POLICY "matches_update_any" ON public.matches FOR UPDATE
   USING (auth.uid() IS NOT NULL)
   WITH CHECK (auth.uid() IS NOT NULL);
 
--- Borrar sigue siendo solo del creador (evita que cualquier padre cargue el partido)
 DROP POLICY IF EXISTS "matches_delete" ON public.matches;
 CREATE POLICY "matches_delete" ON public.matches FOR DELETE
   USING (auth.uid() = created_by);
@@ -75,10 +81,15 @@ BEGIN
   END;
 END $$;
 
--- ============ FUNCIÓN add_point con DEDUPE 10s ============
--- Función atómica: bloquea la fila (FOR UPDATE), comprueba si el mismo equipo
--- anotó en los últimos 10s y, si no, aplica la lógica de voleibol completa
--- (puntuación, side-out, rotación, cierre de set, cierre de partido).
+-- ============ FUNCIÓN add_point (4 jugadoras, rotación horaria) ============
+-- Rotación horaria con 4 posiciones:
+--   P4 (derecha)   -> P1 (saque)
+--   P1 (saque)     -> P2 (izquierda)
+--   P2 (izquierda) -> P3 (centro)
+--   P3 (centro)    -> P4 (derecha)
+-- En array: [pos[3], pos[0], pos[1], pos[2]]
+--
+-- Set siempre a 25 con diferencia mínima de 2.
 CREATE OR REPLACE FUNCTION public.add_point(p_match_id UUID, p_team TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -118,7 +129,7 @@ BEGIN
     RETURN jsonb_build_object('match', to_jsonb(m), 'deduped', false);
   END IF;
 
-  -- DEDUPE: mismo equipo, último punto hace <10s → no se aplica
+  -- DEDUPE: mismo equipo, último punto hace <10s -> no se aplica
   IF m.last_point_at IS NOT NULL
      AND m.last_point_by = p_team
      AND NOW() - m.last_point_at < INTERVAL '10 seconds' THEN
@@ -144,23 +155,20 @@ BEGIN
   new_server := m.server;
 
   IF p_team = 'A' AND NOT was_serving_a THEN
+    -- A gana side-out -> rota A en sentido horario
     new_positions := jsonb_build_array(
-      new_positions->1, new_positions->2, new_positions->3,
-      new_positions->4, new_positions->5, new_positions->0
+      new_positions->3,  -- P4 -> P1
+      new_positions->0,  -- P1 -> P2
+      new_positions->1,  -- P2 -> P3
+      new_positions->2   -- P3 -> P4
     );
     new_server := 'A';
   ELSIF p_team = 'B' AND was_serving_a THEN
     new_server := 'B';
   END IF;
 
-  -- Punto objetivo del set
-  IF (m.format = 'bo5' AND (cs->>'number')::INT = 5)
-     OR (m.format = 'bo3' AND (cs->>'number')::INT = 3) THEN
-    set_target := 15;
-  ELSE
-    set_target := 25;
-  END IF;
-
+  -- Set siempre a 25 puntos con diferencia de 2
+  set_target := 25;
   set_won := (new_a >= set_target OR new_b >= set_target) AND ABS(new_a - new_b) >= 2;
 
   new_sets := m.sets;
@@ -188,9 +196,9 @@ BEGIN
       new_ended_at := NOW();
     ELSE
       new_current := jsonb_build_object('a', 0, 'b', 0, 'number', (cs->>'number')::INT + 1);
+      -- Rotación adicional al empezar set nuevo
       new_positions := jsonb_build_array(
-        new_positions->1, new_positions->2, new_positions->3,
-        new_positions->4, new_positions->5, new_positions->0
+        new_positions->3, new_positions->0, new_positions->1, new_positions->2
       );
     END IF;
   END IF;
@@ -215,7 +223,6 @@ $$;
 GRANT EXECUTE ON FUNCTION public.add_point(UUID, TEXT) TO authenticated, anon;
 
 -- ============ FUNCIÓN undo_point ============
--- Deshace el último punto (cualquier usuario, sin ventana de dedupe).
 CREATE OR REPLACE FUNCTION public.undo_point(p_match_id UUID)
 RETURNS public.matches
 LANGUAGE plpgsql
@@ -256,9 +263,10 @@ $$;
 GRANT EXECUTE ON FUNCTION public.undo_point(UUID) TO authenticated, anon;
 
 -- ============ NOTAS ============
--- Modelo de seguridad colaborativo:
---   * Cualquier padre con auth anónima puede SELECT, INSERT (como sí mismo), UPDATE
---   * DELETE sigue restringido al creador
---   * Las RPC son las únicas operaciones recomendadas para puntos (atomicidad + dedupe)
---   * RLS no bloquea UPDATEs directos: confiamos en el cliente para usar las RPC
---   * Para auditoría futura se puede añadir tabla matches_events con quien hizo qué
+-- v3 (mayo 2026):
+--   * positions: array de 4 jugadoras (antes 6)
+--   * Rotación horaria: P4->P1->P2->P3->P4
+--   * Set siempre a 25 puntos (sin set decisivo más corto)
+--   * Nueva columna 'bench' para sustituciones
+--   * Las sustituciones se hacen vía UPDATE directo desde el cliente
+--     (no necesitan RPC porque no afectan al marcador ni hay race conditions)

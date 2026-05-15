@@ -1,10 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
-<stop offset="0%" stop-color="#007E59"/><stop offset="100%" stop-color="#0E83C6"/>
-</linearGradient></defs>
-<rect width="64" height="64" rx="14" fill="url(#g)"/>
-<circle cx="32" cy="32" r="20" fill="white" stroke="#0F172A" stroke-width="2"/>
-<path d="M 18 28 Q 32 18 46 28" stroke="#0F172A" stroke-width="2.5" fill="none"/>
-<path d="M 22 44 Q 32 30 22 22" stroke="#0F172A" stroke-width="2.5" fill="none"/>
-<path d="M 42 44 Q 32 30 42 22" stroke="#0F172A" stroke-width="2.5" fill="none"/>
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#007E59"/>
+      <stop offset="100%" stop-color="#0E83C6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="170" fill="#FFFFFF"/>
+  <g stroke="#1a1a1a" stroke-width="10" fill="none" stroke-linecap="round">
+    <path d="M 130 175 Q 256 256, 410 320"/>
+    <path d="M 382 175 Q 256 256, 102 320"/>
+    <path d="M 256 86 Q 296 256, 256 426"/>
+  </g>
 </svg>

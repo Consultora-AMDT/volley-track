@@ -48,6 +48,7 @@ function fromRow(row) {
     currentSet: row.current_set,
     sets: row.sets,
     positions: row.positions,
+    bench: row.bench || [],
     lastPointBy: row.last_point_by,
     lastPointAt: row.last_point_at ? new Date(row.last_point_at).getTime() : null,
     updatedAt: new Date(row.updated_at).getTime(),
@@ -56,10 +57,15 @@ function fromRow(row) {
 
 // ============ CRUD ============
 export async function createMatch(config, userId) {
-  const positions =
-    config.players.length === 6
-      ? config.players.map((name, i) => ({ name, number: i + 1 }))
-      : [1, 2, 3, 4, 5, 6].map((n) => ({ name: `J${n}`, number: n }));
+  // positions: 4 titulares (P1=saque, P2=izq, P3=centro, P4=der)
+  // bench: suplentes (cualquier número, opcional)
+  const positions = (config.positions && config.positions.length === 4)
+    ? config.positions
+    : [
+        { name: 'P1' }, { name: 'P2' }, { name: 'P3' }, { name: 'P4' },
+      ];
+
+  const bench = Array.isArray(config.bench) ? config.bench : [];
 
   const payload = {
     created_by: userId,
@@ -71,6 +77,7 @@ export async function createMatch(config, userId) {
     current_set: { a: 0, b: 0, number: 1 },
     sets: [],
     positions,
+    bench,
     finished: false,
     started_at: new Date().toISOString(),
   };
@@ -116,10 +123,13 @@ export async function undoPoint(matchId) {
   return fromRow(data);
 }
 
-// Rotación manual y editar plantilla → UPDATE directo (RLS permite a cualquier auth user).
+// Rotación horaria con 4 posiciones: P4→P1, P1→P2, P2→P3, P3→P4
+// En array: [pos[3], pos[0], pos[1], pos[2]]
 export async function rotatePositions(matchId, currentPositions) {
-  const [p1, ...rest] = currentPositions;
-  const rotated = [...rest, p1];
+  if (!currentPositions || currentPositions.length !== 4) {
+    throw new Error('Se esperan 4 jugadoras en cancha');
+  }
+  const rotated = [currentPositions[3], currentPositions[0], currentPositions[1], currentPositions[2]];
   const { data, error } = await supabase
     .from('matches').update({ positions: rotated }).eq('id', matchId).select().single();
   if (error) throw error;
@@ -129,6 +139,14 @@ export async function rotatePositions(matchId, currentPositions) {
 export async function updateLineup(matchId, positions) {
   const { data, error } = await supabase
     .from('matches').update({ positions }).eq('id', matchId).select().single();
+  if (error) throw error;
+  return fromRow(data);
+}
+
+// Actualiza titulares + banquillo a la vez (para sustituciones).
+export async function updateRoster(matchId, positions, bench) {
+  const { data, error } = await supabase
+    .from('matches').update({ positions, bench }).eq('id', matchId).select().single();
   if (error) throw error;
   return fromRow(data);
 }

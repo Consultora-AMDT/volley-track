@@ -7,13 +7,17 @@ import {
   isConfigured, ensureAuth, onAuthChange,
   createMatch, getMatch, listMatchesByIds,
   addPoint as apiAddPoint, undoPoint as apiUndoPoint,
-  rotatePositions, updateLineup, finishMatch,
+  rotatePositions, updateLineup, updateRoster, finishMatch,
   subscribeToMatch,
 } from './api.js';
 import { trackVisited, getVisitedIds } from './storage.js';
 import { LIMITS } from './config.js';
 import { FeedbackButton } from './FeedbackButton.jsx';
 import { ShareButton } from './ShareButton.jsx';
+
+// Etiquetas de las 4 posiciones (P1=índice 0, P2=índice 1, etc.)
+const POSITION_LABELS = ['Saque', 'Izquierda', 'Centro', 'Derecha'];
+const POSITION_SHORT = ['P1', 'P2', 'P3', 'P4'];
 
 // ============ ROUTER (hash) ============
 function parseHash() {
@@ -46,12 +50,14 @@ function useNow(active) {
   return now;
 }
 
-// Detecta si un cambio de posiciones es una rotación cíclica (vs edición de plantilla)
+// Detecta rotación cíclica horaria con 4 jugadoras:
+//   prev = [P1, P2, P3, P4]  ->  curr = [P4, P1, P2, P3]
 function isCyclicRotation(prev, curr) {
-  if (!prev || !curr || prev.length !== 6 || curr.length !== 6) return false;
-  // Rotación horaria: [p1,p2,p3,p4,p5,p6] → [p2,p3,p4,p5,p6,p1]
-  return prev.slice(1).every((p, i) => p.name === curr[i].name)
-      && prev[0].name === curr[5].name;
+  if (!prev || !curr || prev.length !== 4 || curr.length !== 4) return false;
+  return curr[0].name === prev[3].name
+      && curr[1].name === prev[0].name
+      && curr[2].name === prev[1].name
+      && curr[3].name === prev[2].name;
 }
 
 // ============ APP ============
@@ -264,10 +270,12 @@ function MatchCard({ match, onClick }) {
 function SetupView({ userId }) {
   const [teamA, setTeamA] = useState('');
   const [teamB, setTeamB] = useState('');
-  const [format, setFormat] = useState('bo5');
+  const [format, setFormat] = useState('bo3'); // BO3 por defecto (infantil)
   const [location, setLocation] = useState('');
   const [firstServe, setFirstServe] = useState('A');
-  const [players, setPlayers] = useState(['', '', '', '', '', '']);
+  // 4 titulares + suplentes (lista variable)
+  const [starters, setStarters] = useState(['', '', '', '']);
+  const [bench, setBench] = useState([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
 
@@ -276,9 +284,21 @@ function SetupView({ userId }) {
   const handleStart = async () => {
     setCreating(true); setError(null);
     try {
+      const positions = starters.map((name, i) => ({
+        name: name.trim() || POSITION_SHORT[i],
+      }));
+      const benchPlayers = bench
+        .map((n) => n.trim())
+        .filter(Boolean)
+        .map((name) => ({ name }));
       const m = await createMatch({
-        teamA: teamA.trim(), teamB: teamB.trim(), format, location: location.trim(), firstServe,
-        players: players.map((p) => p.trim()).filter(Boolean).length === 6 ? players.map((p) => p.trim()) : [],
+        teamA: teamA.trim(),
+        teamB: teamB.trim(),
+        format,
+        location: location.trim(),
+        firstServe,
+        positions,
+        bench: benchPlayers,
       }, userId);
       trackVisited(m.id);
       navigate(`#/match/${m.id}`);
@@ -316,16 +336,38 @@ function SetupView({ userId }) {
           <SelectBtn active={firstServe === 'B'} onClick={() => setFirstServe('B')} variant="blue">{teamB || 'Visitante'}</SelectBtn>
         </div>
       </Field>
-      <Field label="Plantilla titular (P1 = saque inicial)">
+
+      <Field label="Titulares en cancha">
         <div className="space-y-2">
-          {players.map((p, i) => (
+          {starters.map((p, i) => (
             <div key={i} className="flex items-center gap-2">
-              <div className="w-11 h-11 rounded-xl bg-brand-green-soft flex items-center justify-center font-bold text-brand-green text-sm">P{i + 1}</div>
-              <input value={p} onChange={(e) => { const np = [...players]; np[i] = e.target.value; setPlayers(np); }} maxLength={LIMITS.playerNameMax} placeholder={`Jugadora ${i + 1}`} className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
+              <div className="w-14 h-14 rounded-xl bg-brand-green-soft flex flex-col items-center justify-center font-bold text-brand-green flex-shrink-0">
+                <div className="text-xs leading-none">{POSITION_SHORT[i]}</div>
+                <div className="text-[9px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
+              </div>
+              <input value={p} onChange={(e) => { const np = [...starters]; np[i] = e.target.value; setStarters(np); }} maxLength={LIMITS.playerNameMax} placeholder={`Jugadora ${POSITION_LABELS[i].toLowerCase()}`} className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-500 mt-2">Opcional. Si lo dejas vacío usamos J1-J6. Editable después.</p>
+        <p className="text-xs text-slate-500 mt-2">P1 saca primero. Editable después por cualquier padre.</p>
+      </Field>
+
+      <Field label={`Suplentes${bench.length > 0 ? ` (${bench.length})` : ''}`}>
+        <div className="space-y-2">
+          {bench.map((p, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold flex-shrink-0">S{i + 1}</div>
+              <input value={p} onChange={(e) => { const nb = [...bench]; nb[i] = e.target.value; setBench(nb); }} maxLength={LIMITS.playerNameMax} placeholder="Nombre" className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
+              <button onClick={() => setBench(bench.filter((_, idx) => idx !== i))} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition flex items-center justify-center flex-shrink-0" aria-label="Quitar suplente">
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => setBench([...bench, ''])} className="w-full mt-2 p-3 bg-white border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-600 font-medium flex items-center justify-center gap-1.5 hover:border-brand-green hover:text-brand-green transition">
+          <Plus size={16} /> Añadir suplente
+        </button>
+        <p className="text-xs text-slate-500 mt-2">Opcional. Durante el partido podrás añadir más y hacer sustituciones.</p>
       </Field>
 
       {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
@@ -448,10 +490,10 @@ function MatchView({ matchId }) {
     finally { setSyncing(false); }
   };
 
-  const handleSaveLineup = async (newPositions) => {
+  const handleSaveRoster = async (newPositions, newBench) => {
     setSyncing(true);
     try {
-      setMatch(await updateLineup(matchId, newPositions));
+      setMatch(await updateRoster(matchId, newPositions, newBench));
       setEditingLineup(false);
       // El toast lo dispara el useEffect que detecta cambio de positions
     } catch (e) { showToast('No se pudo guardar', 'error'); }
@@ -514,9 +556,10 @@ function MatchView({ matchId }) {
       <div className="px-5 mt-2"><ShareButton match={match} /></div>
 
       {editingLineup && (
-        <LineupEditor
+        <RosterModal
           positions={match.positions}
-          onSave={handleSaveLineup}
+          bench={match.bench || []}
+          onSave={handleSaveRoster}
           onClose={() => setEditingLineup(false)}
         />
       )}
@@ -664,83 +707,193 @@ function ScoreButton({ name, score, onAdd, color }) {
 }
 
 function RotationTab({ match, flash, onRotate, onEditLineup }) {
-  const pos = match.positions;
-  const layout = [[pos[3], pos[2], pos[1]], [pos[4], pos[5], pos[0]]];
-  const labels = [['P4', 'P3', 'P2'], ['P5', 'P6', 'P1']];
+  const pos = match.positions || [];
+  // Layout en rombo 3x3:
+  //   .  P3 .
+  //   P2 .  P4
+  //   .  P1 .
+  // P1 (índice 0) = saque, P2 (1) = izquierda, P3 (2) = centro, P4 (3) = derecha
   return (
     <div className="px-5 py-6 bg-slate-50">
       <div className="text-[11px] uppercase tracking-widest text-slate-400 mb-2 text-center font-bold">Red ▲</div>
-      <div className={`bg-gradient-to-b from-brand-green-soft to-white border border-brand-green/20 rounded-3xl p-4 mb-6 shadow-card ${flash ? 'animate-rotation-flash' : ''}`}>
-        {layout.map((row, ri) => (
-          <div key={ri} className={`grid grid-cols-3 gap-2 ${ri === 0 ? 'mb-2 pb-3 border-b-2 border-dashed border-brand-green/30' : ''}`}>
-            {row.map((p, ci) => {
-              const isServer = labels[ri][ci] === 'P1';
-              return (
-                <div key={ci} className={`aspect-square rounded-2xl flex flex-col items-center justify-center p-2 shadow-card transition ${isServer ? 'bg-gradient-to-br from-brand-green to-brand-blue text-white' : 'bg-white border border-slate-200'}`}>
-                  <div className={`text-[10px] font-mono mb-1 font-bold ${isServer ? 'text-white/80' : 'text-slate-400'}`}>
-                    {labels[ri][ci]}{isServer && ' 🏐'}
-                  </div>
-                  <div className={`text-sm font-bold text-center leading-tight truncate w-full ${isServer ? 'text-white' : 'text-slate-900'}`}>
-                    {p?.name || '—'}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+      <div className={`bg-gradient-to-b from-brand-green-soft to-white border border-brand-green/20 rounded-3xl p-5 mb-6 shadow-card ${flash ? 'animate-rotation-flash' : ''}`}>
+        <div className="grid grid-cols-3 gap-2">
+          {/* Fila 1: solo P3 centro */}
+          <div />
+          <CourtCell player={pos[2]} index={2} />
+          <div />
+          {/* Fila 2: P2 izquierda, vacío, P4 derecha */}
+          <CourtCell player={pos[1]} index={1} />
+          <div className="flex items-center justify-center text-[10px] text-slate-400 font-medium">CANCHA</div>
+          <CourtCell player={pos[3]} index={3} />
+          {/* Fila 3: solo P1 saque */}
+          <div />
+          <CourtCell player={pos[0]} index={0} isServer />
+          <div />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-3">
-        <button onClick={onRotate} className="p-4 bg-white border border-slate-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-slate-700">
+        <button onClick={onRotate} className="p-4 bg-white border border-slate-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-slate-700 active:bg-slate-100 transition">
           <RotateCw size={18} className="text-brand-green" /> Rotar
         </button>
-        <button onClick={onEditLineup} className="p-4 bg-white border border-slate-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-slate-700">
-          <Edit3 size={18} className="text-brand-blue" /> Plantilla
+        <button onClick={onEditLineup} className="p-4 bg-white border border-slate-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-slate-700 active:bg-slate-100 transition">
+          <Users size={18} className="text-brand-blue" /> Plantilla
         </button>
       </div>
       <p className="text-xs text-slate-500 text-center px-4 leading-relaxed">
-        La rotación se aplica automática con cada side-out y cambio de set. Cualquier padre puede rotar o editar la plantilla.
+        La rotación se aplica sola tras cada side-out y al empezar set nuevo. Cualquier padre puede rotar, sustituir o añadir suplentes.
       </p>
     </div>
   );
 }
 
-function LineupEditor({ positions, onSave, onClose }) {
-  const [draft, setDraft] = useState(positions.map((p) => p?.name || ''));
-  const save = () => {
-    const newPositions = draft.map((name, i) => ({
-      name: name.trim() || `J${i + 1}`,
-      number: i + 1,
-    }));
-    onSave(newPositions);
-  };
+function CourtCell({ player, index, isServer = false }) {
+  const label = POSITION_LABELS[index];
   return (
-    <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl p-5 w-full max-w-md shadow-card-lg animate-in" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+    <div className={`aspect-square rounded-2xl flex flex-col items-center justify-center p-2 shadow-card transition ${isServer ? 'bg-gradient-to-br from-brand-green to-brand-blue text-white' : 'bg-white border border-slate-200'}`}>
+      <div className={`text-[10px] font-mono mb-1 font-bold ${isServer ? 'text-white/85' : 'text-slate-400'}`}>
+        {POSITION_SHORT[index]}{isServer && ' 🏐'}
+      </div>
+      <div className={`text-sm font-bold text-center leading-tight truncate w-full ${isServer ? 'text-white' : 'text-slate-900'}`}>
+        {player?.name || '—'}
+      </div>
+      <div className={`text-[9px] font-medium mt-0.5 ${isServer ? 'text-white/70' : 'text-slate-400'}`}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+// ============ MODAL PLANTILLA con sustituciones ============
+function RosterModal({ positions, bench, onSave, onClose }) {
+  // Estado de trabajo local: titulares + banquillo
+  const [court, setCourt] = useState(positions.map((p) => ({ name: p?.name || '' })));
+  const [benchList, setBench] = useState((bench || []).map((p) => ({ name: p?.name || '' })));
+  const [swapping, setSwapping] = useState(null); // índice del titular que sale, o null
+  const [renamingIdx, setRenamingIdx] = useState(null); // índice del titular en modo rename
+
+  const handleSubstitute = (incomingIdx) => {
+    if (swapping === null) return;
+    const outgoing = court[swapping];
+    const incoming = benchList[incomingIdx];
+    const newCourt = [...court];
+    newCourt[swapping] = incoming;
+    const newBench = benchList.filter((_, i) => i !== incomingIdx);
+    if (outgoing.name) newBench.push(outgoing);
+    setCourt(newCourt);
+    setBench(newBench);
+    setSwapping(null);
+  };
+
+  const addBenchPlayer = () => setBench([...benchList, { name: '' }]);
+  const updateBenchName = (i, name) => {
+    const nb = [...benchList];
+    nb[i] = { ...nb[i], name };
+    setBench(nb);
+  };
+  const removeBench = (i) => setBench(benchList.filter((_, idx) => idx !== i));
+
+  const updateCourtName = (i, name) => {
+    const nc = [...court];
+    nc[i] = { ...nc[i], name };
+    setCourt(nc);
+  };
+
+  const save = () => {
+    const newPositions = court.map((p, i) => ({ name: (p.name || '').trim() || POSITION_SHORT[i] }));
+    const newBench = benchList.map((p) => ({ name: (p.name || '').trim() })).filter((p) => p.name);
+    onSave(newPositions, newBench);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl p-5 w-full max-w-md shadow-card-lg animate-in max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900">
-            <Edit3 size={20} className="text-brand-green" /> Editar plantilla
+            <Users size={20} className="text-brand-green" /> Plantilla
           </h3>
-          <button onClick={onClose} className="text-slate-400 p-1"><X size={20} /></button>
+          <button onClick={onClose} className="text-slate-400 p-1" aria-label="Cerrar"><X size={20} /></button>
         </div>
-        <p className="text-sm text-slate-500 mb-4">Cambia los nombres en cada posición. La rotación se mantiene.</p>
-        <div className="space-y-2 mb-4">
-          {draft.map((name, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <div className="w-11 h-11 rounded-xl bg-brand-green-soft flex items-center justify-center font-bold text-brand-green text-sm">P{i + 1}</div>
-              <input
-                value={name}
-                onChange={(e) => { const nd = [...draft]; nd[i] = e.target.value; setDraft(nd); }}
-                maxLength={LIMITS.playerNameMax}
-                placeholder={`Jugadora ${i + 1}`}
-                className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 transition"
-              />
+
+        {swapping !== null ? (
+          // Selector de quién entra
+          <>
+            <p className="text-sm text-slate-700 mb-1">Sale: <span className="font-semibold">{court[swapping]?.name || '—'}</span></p>
+            <p className="text-xs text-slate-500 mb-4">¿Quién entra por {POSITION_LABELS[swapping]} ({POSITION_SHORT[swapping]})?</p>
+            <div className="space-y-2 mb-3">
+              {benchList.length === 0 && (
+                <p className="text-sm text-slate-400 italic text-center py-6">No hay suplentes disponibles. Añade alguna en el banquillo.</p>
+              )}
+              {benchList.map((p, i) => (
+                <button key={i} disabled={!p.name.trim()} onClick={() => handleSubstitute(i)} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-left font-medium hover:border-brand-green hover:bg-brand-green-soft/40 disabled:opacity-40 transition flex items-center justify-between">
+                  <span className="truncate">{p.name.trim() || '(sin nombre)'}</span>
+                  <ChevronLeft size={16} className="rotate-180 text-slate-400" />
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
-        <button onClick={save} className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-blue text-white rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card-md">
-          <Check size={18} /> Guardar
-        </button>
+            <button onClick={() => setSwapping(null)} className="w-full p-3 bg-slate-100 text-slate-700 rounded-xl font-medium">Cancelar</button>
+          </>
+        ) : (
+          // Vista normal: cancha + banquillo
+          <>
+            <h4 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2">En cancha (4)</h4>
+            <div className="space-y-2 mb-5">
+              {court.map((p, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-14 h-14 rounded-xl bg-brand-green-soft flex flex-col items-center justify-center font-bold text-brand-green flex-shrink-0">
+                    <div className="text-xs leading-none">{POSITION_SHORT[i]}</div>
+                    <div className="text-[9px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
+                  </div>
+                  {renamingIdx === i ? (
+                    <input
+                      autoFocus
+                      value={p.name}
+                      onChange={(e) => updateCourtName(i, e.target.value)}
+                      onBlur={() => setRenamingIdx(null)}
+                      onKeyDown={(e) => e.key === 'Enter' && setRenamingIdx(null)}
+                      maxLength={LIMITS.playerNameMax}
+                      className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-green"
+                    />
+                  ) : (
+                    <button onClick={() => setRenamingIdx(i)} className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-left font-medium truncate">
+                      {p.name || <span className="text-slate-400 italic">Sin nombre</span>}
+                    </button>
+                  )}
+                  <button onClick={() => setSwapping(i)} className="px-3 h-12 rounded-xl bg-brand-blue-soft text-brand-blue-dark font-semibold text-sm flex items-center gap-1 flex-shrink-0">
+                    <RotateCw size={14} /> Sub
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <h4 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2">Banquillo ({benchList.length})</h4>
+            <div className="space-y-2 mb-2">
+              {benchList.map((p, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold flex-shrink-0">S{i + 1}</div>
+                  <input
+                    value={p.name}
+                    onChange={(e) => updateBenchName(i, e.target.value)}
+                    maxLength={LIMITS.playerNameMax}
+                    placeholder="Nombre"
+                    className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-green"
+                  />
+                  <button onClick={() => removeBench(i)} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition flex items-center justify-center flex-shrink-0" aria-label="Quitar">
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button onClick={addBenchPlayer} className="w-full mb-5 p-3 bg-white border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-600 font-medium flex items-center justify-center gap-1.5 hover:border-brand-green hover:text-brand-green transition">
+              <Plus size={16} /> Añadir suplente
+            </button>
+
+            <button onClick={save} className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-blue text-white rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card-md">
+              <Check size={18} /> Guardar
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
