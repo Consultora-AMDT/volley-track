@@ -340,22 +340,20 @@ function SetupView({ userId }) {
   const [picker, setPicker] = useState(null); // {scope: 'starter'|'bench', idx} para elegir de plantilla
 
   const canStart = teamA.trim() && teamB.trim() && !creating;
-  // El banner de plantilla del cole siempre está disponible (la app es para
-  // el Santa Ana). Los selectores tipo dropdown se activan automáticamente
-  // si hay jugadoras con dorsal (que solo vienen de la plantilla cargada).
-  const rosterLoaded = starters.some((p) => p.number != null) || bench.some((p) => p.number != null);
+  // La plantilla del cole está SIEMPRE activa (esta app es del Santa Ana).
+  // Los slots de titular y banquillo se muestran como selectores que abren
+  // el RosterPickerModal con la lista de jugadoras.
+  const rosterLoaded = true;
 
   // Devuelve las jugadoras de la plantilla del cole que aún no están en
-  // titulares ni en banquillo (por nombre+dorsal). Se usa en el picker
-  // para que cada jugadora solo se pueda añadir una vez.
+  // titulares ni en banquillo. Se usa en el picker para que cada jugadora
+  // solo se pueda añadir una vez. Filtramos por nombre normalizado.
   const availableFromRoster = () => {
-    const used = new Set();
+    const usedNames = new Set();
     [...starters, ...bench].forEach((p) => {
-      if (p.name?.trim()) used.add(`${p.name.trim()}|${p.number ?? ''}`);
+      if (p.name?.trim()) usedNames.add(p.name.trim().toLowerCase());
     });
-    return SANTA_ANA_ROSTER.filter(
-      (p) => !used.has(`${p.name}|${p.number}`)
-    );
+    return SANTA_ANA_ROSTER.filter((p) => !usedNames.has(p.name.toLowerCase()));
   };
 
   const loadRoster = () => {
@@ -1126,16 +1124,19 @@ function RosterModal({ positions, bench, onSave, onClose }) {
   const [swapping, setSwapping] = useState(null);
   const [renamingIdx, setRenamingIdx] = useState(null);
   const [picker, setPicker] = useState(null);
-  // Si cualquier jugadora del partido tiene dorsal, es plantilla del cole
-  const rosterLoaded = [...court, ...benchList].some((p) => p?.number != null);
+  // La plantilla del cole está SIEMPRE activa: los slots son selectores que
+  // abren el RosterPickerModal con la lista de jugadoras del Santa Ana.
+  const rosterLoaded = true;
 
-  // Jugadoras del cole no usadas ni en campo ni en banquillo
+  // Jugadoras del cole no usadas ni en campo ni en banquillo.
+  // Filtramos por nombre normalizado (lowercase trim) para que también
+  // funcione con partidos viejos donde las jugadoras no tenían dorsal.
   const availableFromRoster = () => {
-    const used = new Set();
+    const usedNames = new Set();
     [...court, ...benchList].forEach((p) => {
-      if (p.name?.trim()) used.add(`${p.name.trim()}|${p.number ?? ''}`);
+      if (p?.name?.trim()) usedNames.add(p.name.trim().toLowerCase());
     });
-    return SANTA_ANA_ROSTER.filter((p) => !used.has(`${p.name}|${p.number}`));
+    return SANTA_ANA_ROSTER.filter((p) => !usedNames.has(p.name.toLowerCase()));
   };
 
   const handleSubstitute = (incomingIdx) => {
