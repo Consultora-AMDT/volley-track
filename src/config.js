@@ -1,7 +1,7 @@
 // ⚠️ Ajusta estos valores antes de desplegar.
 // Estos son los canales por los que los padres te enviarán sugerencias.
 
-export const APP_VERSION = '1.4.8';
+export const APP_VERSION = '1.4.9';
 
 export const FEEDBACK = {
   // Tu número de WhatsApp con código de país, SIN "+", espacios ni guiones
@@ -24,7 +24,7 @@ export const LIMITS = {
 // Para añadir/quitar jugadoras, edita este array.
 // Al crear un partido se ofrece cargar esta plantilla con un solo botón.
 export const SANTA_ANA_ROSTER = [
-  { name: 'María Carrasco', number: 2 },
+  { name: 'María C.', number: 2 },
   { name: 'Paula H', number: 3 },
   { name: 'Lucia', number: 5 },
   { name: 'Alicia', number: 7 },
