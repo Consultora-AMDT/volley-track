@@ -816,7 +816,7 @@ function MatchView({ matchId }) {
               </span>
             )}
           </div>
-          {!match.finished ? <button onClick={handleUndo} className="text-brand-green text-sm font-medium">Deshacer</button> : <div className="w-12" />}
+          {!match.finished ? <button onClick={handleUndo} className="text-red-500 text-sm font-medium">Deshacer</button> : <div className="w-12" />}
         </div>
 
         <div className="flex items-stretch gap-2">
@@ -918,7 +918,7 @@ function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
           <p className="text-[16px] text-slate-500 text-center mb-4 px-4 leading-relaxed">
             Si varios padres pulsan el mismo punto en menos de 10s, solo cuenta una vez.
           </p>
-          <button onClick={onEnd} className="w-full p-3 bg-white border border-slate-200 text-slate-500 rounded-xl text-sm font-medium shadow-card">
+          <button onClick={onEnd} className="w-full p-3 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-sm font-medium shadow-card transition">
             Finalizar partido manualmente
           </button>
         </>
@@ -984,7 +984,7 @@ function FinishedSummary({ match, onReopen }) {
       {onReopen && (
         <button
           onClick={onReopen}
-          className="w-full mt-6 p-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium shadow-card flex items-center justify-center gap-2"
+          className="w-full mt-6 p-3 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-sm font-medium shadow-card flex items-center justify-center gap-2 transition"
         >
           <RotateCw size={15} /> Reabrir partido
         </button>
