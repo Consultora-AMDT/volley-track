@@ -1043,6 +1043,8 @@ function ScoreNumber({ score, accent }) {
 
 function RotationTab({ match, flash, onRotate, onEditLineup }) {
   const pos = match.positions || [];
+  const isServingA = match.server === 'A' && !match.finished;
+  const streak = isServingA ? (match.serveStreak || 0) : 0;
   // Layout en rombo 3x3:
   //   .  P3 .
   //   P2 .  P4
@@ -1063,9 +1065,15 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
           <CourtCell player={pos[3]} index={3} />
           {/* Fila 3: solo P1 saque */}
           <div />
-          <CourtCell player={pos[0]} index={0} isServer />
+          <CourtCell player={pos[0]} index={0} isServer={isServingA} />
           <div />
         </div>
+        {isServingA && streak > 0 && (
+          <div className="mt-3 text-center text-[13px] text-brand-green-dark font-semibold">
+            Saques seguidos: {streak} / 3
+            {streak >= 3 && <span className="ml-1 text-red-500">· al próximo punto rota</span>}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-3">
@@ -1077,7 +1085,7 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
         </button>
       </div>
       <p className="text-xs text-slate-500 text-center px-4 leading-relaxed">
-        La rotación se aplica sola tras cada side-out y al empezar set nuevo. Cualquier padre puede rotar, sustituir o añadir suplentes.
+        Rotación automática: al ganar el saque (side-out) y al 4º punto consecutivo sacando. Cualquier padre puede rotar manualmente, sustituir o añadir suplentes.
       </p>
     </div>
   );

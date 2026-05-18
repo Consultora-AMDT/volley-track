@@ -45,6 +45,7 @@ function fromRow(row) {
     finished: row.finished,
     winner: row.winner,
     server: row.server,
+    serveStreak: row.serve_streak ?? 0,
     currentSet: row.current_set,
     sets: row.sets,
     positions: row.positions,
