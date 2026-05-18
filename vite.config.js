@@ -47,6 +47,11 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
         cleanupOutdatedCaches: true,
+        // skipWaiting + clientsClaim: el SW nuevo toma control INMEDIATAMENTE
+        // sin esperar a que se cierren todas las pestañas. Esto evita el bug
+        // clásico del PWA "tengo la versión vieja y no se actualiza nunca".
+        skipWaiting: true,
+        clientsClaim: true,
       },
       devOptions: {
         enabled: true
