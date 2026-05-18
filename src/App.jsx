@@ -11,7 +11,7 @@ import {
   subscribeToMatch,
 } from './api.js';
 import { trackVisited, getVisitedIds, forgetVisited } from './storage.js';
-import { LIMITS, SANTA_ANA_ROSTER, HOME_TEAM_ALIASES } from './config.js';
+import { LIMITS, SANTA_ANA_ROSTER } from './config.js';
 import { FeedbackButton } from './FeedbackButton.jsx';
 import { ShareButton } from './ShareButton.jsx';
 import { VersionFooter } from './VersionFooter.jsx';
@@ -340,9 +340,10 @@ function SetupView({ userId }) {
   const [picker, setPicker] = useState(null); // {scope: 'starter'|'bench', idx} para elegir de plantilla
 
   const canStart = teamA.trim() && teamB.trim() && !creating;
-  const isHomeTeam = teamA && HOME_TEAM_ALIASES.some(
-    (alias) => teamA.toLowerCase().includes(alias)
-  );
+  // El banner de plantilla del cole siempre está disponible (la app es para
+  // el Santa Ana). Los selectores tipo dropdown se activan automáticamente
+  // si hay jugadoras con dorsal (que solo vienen de la plantilla cargada).
+  const rosterLoaded = starters.some((p) => p.number != null) || bench.some((p) => p.number != null);
 
   // Devuelve las jugadoras de la plantilla del cole que aún no están en
   // titulares ni en banquillo (por nombre+dorsal). Se usa en el picker
@@ -464,20 +465,18 @@ function SetupView({ userId }) {
         </div>
       </Field>
 
-      {isHomeTeam && (
-        <div className="mb-5 p-3 bg-brand-green-soft border border-brand-green/20 rounded-2xl flex items-center justify-between gap-2">
-          <div className="text-sm">
-            <div className="font-bold text-brand-green-dark">Plantilla del cole</div>
-            <div className="text-xs text-slate-600">11 jugadoras del Santa Ana y San Rafael</div>
-          </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <button onClick={loadRoster} className="px-3 py-2 bg-brand-green text-white rounded-xl text-xs font-bold shadow-card">Cargar</button>
-            {(starters.some((p) => p.name) || bench.length > 0) && (
-              <button onClick={clearAll} className="px-3 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-medium">Vaciar</button>
-            )}
-          </div>
+      <div className="mb-5 p-3 bg-brand-green-soft border border-brand-green/20 rounded-2xl flex items-center justify-between gap-2">
+        <div className="text-sm">
+          <div className="font-bold text-brand-green-dark">Plantilla del cole</div>
+          <div className="text-xs text-slate-600">11 jugadoras del Santa Ana y San Rafael</div>
         </div>
-      )}
+        <div className="flex gap-2 flex-shrink-0">
+          <button onClick={loadRoster} className="px-3 py-2 bg-brand-green text-white rounded-xl text-xs font-bold shadow-card">Cargar</button>
+          {(starters.some((p) => p.name) || bench.length > 0) && (
+            <button onClick={clearAll} className="px-3 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-medium">Vaciar</button>
+          )}
+        </div>
+      </div>
 
       <Field label="Titulares en campo">
         <div className="space-y-2">
@@ -487,7 +486,7 @@ function SetupView({ userId }) {
                 <div className="text-xs leading-none">{POSITION_SHORT[i]}</div>
                 <div className="text-[14px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
               </div>
-              {isHomeTeam ? (
+              {rosterLoaded ? (
                 <button
                   onClick={() => setPicker({ scope: 'starter', idx: i })}
                   className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-left flex items-center justify-between shadow-card"
@@ -528,7 +527,7 @@ function SetupView({ userId }) {
           {bench.map((p, i) => (
             <div key={i} className="flex items-center gap-2">
               <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold flex-shrink-0">S{i + 1}</div>
-              {isHomeTeam ? (
+              {rosterLoaded ? (
                 <button
                   onClick={() => setPicker({ scope: 'bench', idx: i })}
                   className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-left flex items-center justify-between shadow-card"
@@ -563,10 +562,10 @@ function SetupView({ userId }) {
           ))}
         </div>
         <button
-          onClick={() => isHomeTeam ? setPicker({ scope: 'bench', idx: 'new' }) : setBench([...bench, { name: '', number: null }])}
+          onClick={() => rosterLoaded ? setPicker({ scope: 'bench', idx: 'new' }) : setBench([...bench, { name: '', number: null }])}
           className="w-full mt-2 p-3 bg-white border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-600 font-medium flex items-center justify-center gap-1.5 hover:border-brand-green hover:text-brand-green transition"
         >
-          <Plus size={16} /> Añadir suplente{isHomeTeam ? ' del cole' : ''}
+          <Plus size={16} /> Añadir suplente{rosterLoaded ? ' del cole' : ''}
         </button>
         <p className="text-xs text-slate-500 mt-2">Opcional. Durante el partido podrás añadir más y hacer sustituciones.</p>
       </Field>
@@ -831,7 +830,6 @@ function MatchView({ matchId }) {
         <RosterModal
           positions={match.positions}
           bench={match.bench || []}
-          isHomeTeam={HOME_TEAM_ALIASES.some((a) => match.teamA.toLowerCase().includes(a))}
           onSave={handleSaveRoster}
           onClose={() => setEditingLineup(false)}
         />
@@ -1120,15 +1118,16 @@ function ConfirmModal({ title, message, confirmText, cancelText = 'Cancelar', va
 }
 
 // ============ MODAL PLANTILLA con sustituciones ============
-// Acepta isHomeTeam para mostrar selectores de la plantilla del cole.
-function RosterModal({ positions, bench, onSave, onClose, isHomeTeam = false }) {
-  // Estado de trabajo local: titulares + banquillo (objetos completos)
-  // Clonamos en profundidad para preservar todas las propiedades (name, number, ...)
+// Si las jugadoras vienen con dorsales (plantilla del cole cargada), activa
+// los selectores tipo dropdown. Si no, fallback a inputs editables.
+function RosterModal({ positions, bench, onSave, onClose }) {
   const [court, setCourt] = useState(() => positions.map((p) => ({ ...(p || {}) })));
   const [benchList, setBench] = useState(() => (bench || []).map((p) => ({ ...(p || {}) })));
   const [swapping, setSwapping] = useState(null);
   const [renamingIdx, setRenamingIdx] = useState(null);
-  const [picker, setPicker] = useState(null); // {scope: 'starter'|'bench', idx}
+  const [picker, setPicker] = useState(null);
+  // Si cualquier jugadora del partido tiene dorsal, es plantilla del cole
+  const rosterLoaded = [...court, ...benchList].some((p) => p?.number != null);
 
   // Jugadoras del cole no usadas ni en campo ni en banquillo
   const availableFromRoster = () => {
@@ -1253,7 +1252,7 @@ function RosterModal({ positions, bench, onSave, onClose, isHomeTeam = false }) 
                       maxLength={LIMITS.playerNameMax}
                       className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-green"
                     />
-                  ) : isHomeTeam ? (
+                  ) : rosterLoaded ? (
                     <button
                       onClick={() => setPicker({ scope: 'starter', idx: i })}
                       className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-left font-medium truncate flex items-center justify-between"
@@ -1302,7 +1301,7 @@ function RosterModal({ positions, bench, onSave, onClose, isHomeTeam = false }) 
               ))}
             </div>
             <div className="grid gap-2 mb-5">
-              {isHomeTeam ? (
+              {rosterLoaded ? (
                 <button onClick={() => setPicker({ scope: 'bench', idx: 'new' })} className="w-full p-3 bg-brand-green-soft border-2 border-dashed border-brand-green/30 rounded-xl text-sm text-brand-green-dark font-medium flex items-center justify-center gap-1.5 hover:border-brand-green hover:bg-brand-green-soft/70 transition">
                   <Plus size={16} /> Añadir suplente del cole
                 </button>
