@@ -1025,21 +1025,17 @@ function ScoreButton({ name, score, onAdd, onSubtract, color }) {
   );
 }
 
-// Renderiza el marcador como columna de dígitos cuando hay más de uno,
-// para garantizar que NUNCA rompe la tarjeta en pantallas estrechas.
-// Un dígito → tamaño máximo. Dos dígitos → uno encima del otro centrado.
-// Tres dígitos (imposible pero a prueba de balas) → también vertical.
+// Cuando el score es de un solo dígito (0-9) lo mostramos a tamaño completo.
+// Con dos dígitos (10-99) reducimos el tamaño para que quepa horizontal sin
+// romper la tarjeta. Para 3 dígitos (caso teórico improbable) lo bajamos más.
+// Antes apilábamos los dígitos verticalmente con leading muy comprimido y
+// quedaba feo y poco legible. Esta versión simplemente se adapta en ancho.
 function ScoreNumber({ score, accent }) {
-  const digits = String(score).split('');
-  if (digits.length === 1) {
-    return <div className={`text-7xl font-bold text-center my-2 font-mono tabular-nums leading-none ${accent}`}>{digits[0]}</div>;
-  }
-  // 2+ dígitos: en columna, mismo tamaño cada uno, centrados
+  const len = String(score).length;
+  const sizeClass = len === 1 ? 'text-7xl' : len === 2 ? 'text-6xl' : 'text-5xl';
   return (
-    <div className={`flex flex-col items-center justify-center my-1 font-mono tabular-nums leading-[0.85] ${accent}`}>
-      {digits.map((d, i) => (
-        <span key={i} className="text-6xl font-bold">{d}</span>
-      ))}
+    <div className={`${sizeClass} font-bold text-center my-2 font-mono tabular-nums leading-none ${accent}`}>
+      {score}
     </div>
   );
 }
