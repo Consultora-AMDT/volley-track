@@ -1069,8 +1069,8 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-3">
-        <button onClick={onRotate} className="p-4 bg-white border border-slate-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-slate-700 active:bg-slate-100 transition">
-          <RotateCw size={18} className="text-brand-green" /> Rotar
+        <button onClick={onRotate} className="p-4 bg-white border border-red-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-red-500 hover:bg-red-50 active:bg-red-100 transition">
+          <RotateCw size={18} className="text-red-500" /> Rotar
         </button>
         <button onClick={onEditLineup} className="p-4 bg-white border border-slate-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-slate-700 active:bg-slate-100 transition">
           <Users size={18} className="text-brand-green-dark" /> Plantilla
