@@ -133,11 +133,21 @@ export async function subtractPoint(matchId, team) {
   return fromRow(data);
 }
 
-// Reabre un partido finalizado por error. Mantiene el marcador y los sets tal cual.
+// Reabre un partido finalizado por error. Vía RPC reopen_match (v1.4.3):
+// si el último set en sets[] coincide con currentSet, lo retira y resta
+// un punto al ganador para que se pueda volver a jugar sin re-cerrarse.
+// Esto evita el bug de set duplicado al pulsar el siguiente +PUNTO.
 export async function reopenMatch(matchId) {
-  const { data, error } = await supabase
-    .from('matches').update({ finished: false, winner: null, ended_at: null })
-    .eq('id', matchId).select().single();
+  const { data, error } = await supabase.rpc('reopen_match', { p_match_id: matchId });
+  if (error) throw error;
+  return fromRow(data);
+}
+
+// Limpia un partido cuyo sets[] tiene entradas duplicadas por number.
+// Útil para arreglar partidos ya corruptos (los nuevos no deberían
+// generar duplicados gracias a la protección en add_point v1.4.3).
+export async function dedupeMatchSets(matchId) {
+  const { data, error } = await supabase.rpc('dedupe_match_sets', { p_match_id: matchId });
   if (error) throw error;
   return fromRow(data);
 }

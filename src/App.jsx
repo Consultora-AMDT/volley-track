@@ -61,6 +61,20 @@ function isCyclicRotation(prev, curr) {
       && curr[3].name === prev[2].name;
 }
 
+// Defensa en la UI contra el bug de "set duplicado" (v1.4.3): si el array
+// sets[] contiene varias entradas con el mismo number (típicamente por
+// reopens antiguos antes del fix del RPC), nos quedamos con la última
+// entrada de cada número y ordenamos ascendentemente. Esto es solo cosmético
+// — el dato real en la BD se limpia con dedupeMatchSets / la migración SQL.
+function uniqueSetsByNumber(sets) {
+  if (!Array.isArray(sets) || sets.length === 0) return [];
+  const byNumber = new Map();
+  for (const s of sets) {
+    if (s && s.number != null) byNumber.set(s.number, s);
+  }
+  return Array.from(byNumber.values()).sort((a, b) => a.number - b.number);
+}
+
 // ============ APP ============
 export default function App() {
   const [route, setRoute] = useState(parseHash());
@@ -284,8 +298,9 @@ function HomeView({ userId }) {
 }
 
 function MatchCard({ match, userId, onClick, onDelete }) {
-  const setsA = match.sets.filter((s) => s.a > s.b).length;
-  const setsB = match.sets.filter((s) => s.b > s.a).length;
+  const sets = uniqueSetsByNumber(match.sets);
+  const setsA = sets.filter((s) => s.a > s.b).length;
+  const setsB = sets.filter((s) => s.b > s.a).length;
   const wonA = match.winner === 'A';
   const wonB = match.winner === 'B';
   return (
@@ -777,13 +792,13 @@ function MatchView({ matchId }) {
     </div>
   );
 
-  const setsA = match.sets.filter((s) => s.a > s.b).length;
-  const setsB = match.sets.filter((s) => s.b > s.a).length;
+  const sets = uniqueSetsByNumber(match.sets);
+  const setsA = sets.filter((s) => s.a > s.b).length;
+  const setsB = sets.filter((s) => s.b > s.a).length;
 
   return (
     <div>
       {toast && <Toast key={toast.key} message={toast.message} kind={toast.kind} onClose={() => setToast(null)} />}
-
       {/* Header sticky */}
       <div className="px-5 pt-10 pb-3 sticky top-0 bg-slate-50/95 backdrop-blur-md z-10 border-b border-slate-200">
         <div className="flex items-center justify-between mb-3">
@@ -909,11 +924,11 @@ function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
         </>
       )}
 
-      {match.sets.length > 0 && !match.finished && (
+      {uniqueSetsByNumber(match.sets).length > 0 && !match.finished && (
         <div className="mt-8">
           <h3 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3">Sets jugados</h3>
           <div className="space-y-2">
-            {match.sets.map((s) => <SetRow key={s.number} set={s} teamA={match.teamA} teamB={match.teamB} />)}
+            {uniqueSetsByNumber(match.sets).map((s) => <SetRow key={s.number} set={s} teamA={match.teamA} teamB={match.teamB} />)}
           </div>
         </div>
       )}
@@ -936,8 +951,9 @@ function SetRow({ set: s, teamA, teamB }) {
 }
 
 function FinishedSummary({ match, onReopen }) {
-  const setsA = match.sets.filter((s) => s.a > s.b).length;
-  const setsB = match.sets.filter((s) => s.b > s.a).length;
+  const sets = uniqueSetsByNumber(match.sets);
+  const setsA = sets.filter((s) => s.a > s.b).length;
+  const setsB = sets.filter((s) => s.b > s.a).length;
   const winnerName = match.winner === 'A' ? match.teamA : match.teamB;
   const winnerColor = match.winner === 'A' ? 'text-brand-green' : 'text-brand-green-dark';
   const duration = match.endedAt ? formatDuration(match.endedAt - match.startedAt) : null;
@@ -961,7 +977,7 @@ function FinishedSummary({ match, onReopen }) {
       <div className="mt-6">
         <h3 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3 text-center">Sets</h3>
         <div className="space-y-2">
-          {match.sets.map((s) => <SetRow key={s.number} set={s} teamA={match.teamA} teamB={match.teamB} />)}
+          {sets.map((s) => <SetRow key={s.number} set={s} teamA={match.teamA} teamB={match.teamB} />)}
         </div>
       </div>
 
