@@ -1,13 +1,7 @@
--- VolleyTrack: esquema Supabase v3 (4 jugadoras + banquillo + rotación horaria)
--- Ejecuta en SQL Editor de Supabase. Idempotente: puedes re-ejecutarlo.
---
--- IMPORTANTE: este script borra los partidos existentes porque cambia el
--- formato de positions (de 6 a 4). Si tienes partidos en producción que
--- quieres conservar, NO lo ejecutes hasta migrar manualmente.
-
--- ============ LIMPIEZA DE DATOS PREVIOS ============
--- Comentar esta línea si quieres conservar partidos antiguos (no funcionarán bien).
-DELETE FROM public.matches;
+-- VolleyTrack: esquema Supabase v3.2 (4 jugadoras + banquillo + rotación horaria)
+-- Ejecuta en SQL Editor de Supabase. Idempotente: puedes re-ejecutarlo
+-- sin perder datos. CREATE TABLE IF NOT EXISTS y CREATE OR REPLACE FUNCTION
+-- aseguran que los partidos existentes se conservan en cada actualización.
 
 -- ============ TABLA ============
 CREATE TABLE IF NOT EXISTS public.matches (

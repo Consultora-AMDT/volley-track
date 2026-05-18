@@ -11,13 +11,13 @@ import {
   subscribeToMatch,
 } from './api.js';
 import { trackVisited, getVisitedIds, forgetVisited } from './storage.js';
-import { LIMITS } from './config.js';
+import { LIMITS, SANTA_ANA_ROSTER, HOME_TEAM_ALIASES } from './config.js';
 import { FeedbackButton } from './FeedbackButton.jsx';
 import { ShareButton } from './ShareButton.jsx';
 import { VersionFooter } from './VersionFooter.jsx';
 
 // Etiquetas de las 4 posiciones (P1=índice 0, P2=índice 1, etc.)
-const POSITION_LABELS = ['Saque', 'Izquierda', 'Delantera', 'Derecha'];
+const POSITION_LABELS = ['Saque', 'Izquierda', 'Colocador', 'Derecha'];
 const POSITION_SHORT = ['P1', 'P2', 'P3', 'P4'];
 
 // ============ ROUTER (hash) ============
@@ -195,7 +195,7 @@ function HomeView({ userId }) {
       {inProgress && (
         <button
           onClick={() => navigate(`#/match/${inProgress.id}`)}
-          className="w-full mb-3 p-4 bg-gradient-to-r from-brand-green to-brand-blue text-white rounded-2xl font-semibold flex items-center justify-between shadow-card-md transition"
+          className="w-full mb-3 p-4 bg-gradient-to-r from-brand-green to-brand-green-dark text-white rounded-2xl font-semibold flex items-center justify-between shadow-card-md transition"
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
@@ -228,8 +228,8 @@ function HomeView({ userId }) {
         className="w-full p-5 bg-white rounded-2xl font-semibold flex items-center justify-between transition border border-slate-200 shadow-card hover:shadow-card-md"
       >
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-brand-blue-soft flex items-center justify-center">
-            <History size={22} className="text-brand-blue" />
+          <div className="w-11 h-11 rounded-xl bg-brand-green-soft flex items-center justify-center">
+            <History size={22} className="text-brand-green-dark" />
           </div>
           <div className="text-left">
             <div className="text-base text-slate-900">Mis partidos</div>
@@ -241,9 +241,9 @@ function HomeView({ userId }) {
         </div>
       </button>
 
-      <div className="mt-6 p-4 bg-brand-blue-soft/60 rounded-2xl border border-brand-blue/10">
+      <div className="mt-6 p-4 bg-brand-green-soft/60 rounded-2xl border border-brand-green/10">
         <p className="text-xs text-slate-700 leading-relaxed">
-          <strong className="text-brand-blue-dark">¿Te han pasado un enlace?</strong> Ábrelo desde WhatsApp. El partido aparecerá aquí y podrás sumar puntos junto al resto del grupo.
+          <strong className="text-brand-green-dark">¿Te han pasado un enlace?</strong> Ábrelo desde WhatsApp. El partido aparecerá aquí y podrás sumar puntos junto al resto del grupo.
         </p>
       </div>
 
@@ -296,8 +296,8 @@ function MatchCard({ match, userId, onClick, onDelete }) {
           <span className={`font-bold text-xl tabular-nums ml-2 flex-shrink-0 ${wonA ? 'text-brand-green' : 'text-slate-400'}`}>{setsA}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className={`truncate ${wonB ? 'text-brand-blue font-semibold' : 'text-slate-700'}`}>{match.teamB}</span>
-          <span className={`font-bold text-xl tabular-nums ml-2 flex-shrink-0 ${wonB ? 'text-brand-blue' : 'text-slate-400'}`}>{setsB}</span>
+          <span className={`truncate ${wonB ? 'text-brand-green-dark font-semibold' : 'text-slate-700'}`}>{match.teamB}</span>
+          <span className={`font-bold text-xl tabular-nums ml-2 flex-shrink-0 ${wonB ? 'text-brand-green-dark' : 'text-slate-400'}`}>{setsB}</span>
         </div>
         <div className="text-xs text-slate-500 mt-2 flex items-center gap-2 font-normal">
           {new Date(match.startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -329,24 +329,95 @@ function SetupView({ userId }) {
   const [format, setFormat] = useState('bo3'); // BO3 por defecto (infantil)
   const [location, setLocation] = useState('');
   const [firstServe, setFirstServe] = useState('A');
-  // 4 titulares + suplentes (lista variable)
-  const [starters, setStarters] = useState(['', '', '', '']);
-  const [bench, setBench] = useState([]);
+  // 4 titulares + suplentes: cada uno {name, number?}
+  const [starters, setStarters] = useState([
+    { name: '', number: null }, { name: '', number: null },
+    { name: '', number: null }, { name: '', number: null },
+  ]);
+  const [bench, setBench] = useState([]); // array de {name, number?}
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
+  const [picker, setPicker] = useState(null); // {scope: 'starter'|'bench', idx} para elegir de plantilla
 
   const canStart = teamA.trim() && teamB.trim() && !creating;
+  const isHomeTeam = teamA && HOME_TEAM_ALIASES.some(
+    (alias) => teamA.toLowerCase().includes(alias)
+  );
+
+  // Devuelve las jugadoras de la plantilla del cole que aún no están en
+  // titulares ni en banquillo (por nombre+dorsal). Se usa en el picker
+  // para que cada jugadora solo se pueda añadir una vez.
+  const availableFromRoster = () => {
+    const used = new Set();
+    [...starters, ...bench].forEach((p) => {
+      if (p.name?.trim()) used.add(`${p.name.trim()}|${p.number ?? ''}`);
+    });
+    return SANTA_ANA_ROSTER.filter(
+      (p) => !used.has(`${p.name}|${p.number}`)
+    );
+  };
+
+  const loadRoster = () => {
+    // Carga las 4 primeras como titulares y el resto como banquillo,
+    // ordenadas por dorsal.
+    const sorted = [...SANTA_ANA_ROSTER];
+    const starters4 = sorted.slice(0, 4).map((p) => ({ ...p }));
+    const benchRest = sorted.slice(4).map((p) => ({ ...p }));
+    // Rellena hasta 4 si el roster tiene menos
+    while (starters4.length < 4) starters4.push({ name: '', number: null });
+    setStarters(starters4);
+    setBench(benchRest);
+  };
+
+  const clearAll = () => {
+    setStarters([
+      { name: '', number: null }, { name: '', number: null },
+      { name: '', number: null }, { name: '', number: null },
+    ]);
+    setBench([]);
+  };
+
+  const pickFromRoster = (pickedPlayer) => {
+    if (!picker) return;
+    if (picker.scope === 'starter') {
+      const ns = [...starters];
+      // Si la jugadora estaba en banquillo, sácala
+      setBench(bench.filter(
+        (b) => !(b.name === pickedPlayer.name && b.number === pickedPlayer.number)
+      ));
+      // Si ya había alguien en este puesto y tiene nombre, mándalo al banquillo
+      const previous = ns[picker.idx];
+      ns[picker.idx] = { ...pickedPlayer };
+      setStarters(ns);
+      if (previous.name?.trim()) {
+        setBench((prev) => [...prev, previous]);
+      }
+    } else if (picker.scope === 'bench') {
+      // Añadir al banquillo (en la posición picker.idx si es válida)
+      const nb = [...bench];
+      if (picker.idx === 'new') {
+        nb.push({ ...pickedPlayer });
+      } else {
+        nb[picker.idx] = { ...pickedPlayer };
+      }
+      setBench(nb);
+    }
+    setPicker(null);
+  };
 
   const handleStart = async () => {
     setCreating(true); setError(null);
     try {
-      const positions = starters.map((name, i) => ({
-        name: name.trim() || POSITION_SHORT[i],
+      const positions = starters.map((p, i) => ({
+        name: (p.name || '').trim() || POSITION_SHORT[i],
+        ...(p.number != null ? { number: p.number } : {}),
       }));
       const benchPlayers = bench
-        .map((n) => n.trim())
-        .filter(Boolean)
-        .map((name) => ({ name }));
+        .filter((p) => (p.name || '').trim())
+        .map((p) => ({
+          name: p.name.trim(),
+          ...(p.number != null ? { number: p.number } : {}),
+        }));
       const m = await createMatch({
         teamA: teamA.trim(),
         teamB: teamB.trim(),
@@ -372,10 +443,10 @@ function SetupView({ userId }) {
       <h1 className="text-2xl font-bold mb-6 text-slate-900">Nuevo partido</h1>
 
       <Field label="Equipo local">
-        <input value={teamA} onChange={(e) => setTeamA(e.target.value)} maxLength={LIMITS.teamNameMax} placeholder="Ej. Santa Ana" className="w-full p-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
+        <input value={teamA} onChange={(e) => setTeamA(e.target.value)} maxLength={LIMITS.teamNameMax} placeholder="Ej. Santa Ana y San Rafael" className="w-full p-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
       </Field>
       <Field label="Equipo visitante">
-        <input value={teamB} onChange={(e) => setTeamB(e.target.value)} maxLength={LIMITS.teamNameMax} placeholder="Ej. CV Pozuelo" className="w-full p-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/10 shadow-card transition" />
+        <input value={teamB} onChange={(e) => setTeamB(e.target.value)} maxLength={LIMITS.teamNameMax} placeholder="Ej. CV Pozuelo" className="w-full p-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
       </Field>
       <Field label="Lugar (opcional)">
         <input value={location} onChange={(e) => setLocation(e.target.value)} maxLength={LIMITS.locationMax} placeholder="Pabellón..." className="w-full p-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
@@ -389,9 +460,24 @@ function SetupView({ userId }) {
       <Field label="Saque inicial">
         <div className="grid grid-cols-2 gap-2">
           <SelectBtn active={firstServe === 'A'} onClick={() => setFirstServe('A')} variant="green">{teamA || 'Local'}</SelectBtn>
-          <SelectBtn active={firstServe === 'B'} onClick={() => setFirstServe('B')} variant="blue">{teamB || 'Visitante'}</SelectBtn>
+          <SelectBtn active={firstServe === 'B'} onClick={() => setFirstServe('B')} variant="green">{teamB || 'Visitante'}</SelectBtn>
         </div>
       </Field>
+
+      {isHomeTeam && (
+        <div className="mb-5 p-3 bg-brand-green-soft border border-brand-green/20 rounded-2xl flex items-center justify-between gap-2">
+          <div className="text-sm">
+            <div className="font-bold text-brand-green-dark">Plantilla del cole</div>
+            <div className="text-xs text-slate-600">11 jugadoras del Santa Ana y San Rafael</div>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <button onClick={loadRoster} className="px-3 py-2 bg-brand-green text-white rounded-xl text-xs font-bold shadow-card">Cargar</button>
+            {(starters.some((p) => p.name) || bench.length > 0) && (
+              <button onClick={clearAll} className="px-3 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-medium">Vaciar</button>
+            )}
+          </div>
+        </div>
+      )}
 
       <Field label="Titulares en campo">
         <div className="space-y-2">
@@ -401,7 +487,36 @@ function SetupView({ userId }) {
                 <div className="text-xs leading-none">{POSITION_SHORT[i]}</div>
                 <div className="text-[14px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
               </div>
-              <input value={p} onChange={(e) => { const np = [...starters]; np[i] = e.target.value; setStarters(np); }} maxLength={LIMITS.playerNameMax} placeholder={`Jugadora ${POSITION_LABELS[i].toLowerCase()}`} className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
+              {isHomeTeam ? (
+                <button
+                  onClick={() => setPicker({ scope: 'starter', idx: i })}
+                  className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-left flex items-center justify-between shadow-card"
+                >
+                  <span className={p.name ? 'text-slate-900 font-medium truncate' : 'text-slate-400'}>
+                    {p.name ? (
+                      <>
+                        {p.name}
+                        {p.number != null && <span className="ml-2 text-brand-green font-mono text-sm">#{p.number}</span>}
+                      </>
+                    ) : (
+                      `Elegir jugadora ${POSITION_LABELS[i].toLowerCase()}`
+                    )}
+                  </span>
+                  <ChevronLeft size={16} className="rotate-180 text-slate-400 flex-shrink-0 ml-2" />
+                </button>
+              ) : (
+                <input
+                  value={p.name}
+                  onChange={(e) => {
+                    const np = [...starters];
+                    np[i] = { ...np[i], name: e.target.value };
+                    setStarters(np);
+                  }}
+                  maxLength={LIMITS.playerNameMax}
+                  placeholder={`Jugadora ${POSITION_LABELS[i].toLowerCase()}`}
+                  className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition"
+                />
+              )}
             </div>
           ))}
         </div>
@@ -413,25 +528,99 @@ function SetupView({ userId }) {
           {bench.map((p, i) => (
             <div key={i} className="flex items-center gap-2">
               <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold flex-shrink-0">S{i + 1}</div>
-              <input value={p} onChange={(e) => { const nb = [...bench]; nb[i] = e.target.value; setBench(nb); }} maxLength={LIMITS.playerNameMax} placeholder="Nombre" className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
+              {isHomeTeam ? (
+                <button
+                  onClick={() => setPicker({ scope: 'bench', idx: i })}
+                  className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-left flex items-center justify-between shadow-card"
+                >
+                  <span className={p.name ? 'text-slate-900 font-medium truncate' : 'text-slate-400'}>
+                    {p.name ? (
+                      <>
+                        {p.name}
+                        {p.number != null && <span className="ml-2 text-brand-green font-mono text-sm">#{p.number}</span>}
+                      </>
+                    ) : 'Elegir suplente'}
+                  </span>
+                  <ChevronLeft size={16} className="rotate-180 text-slate-400 flex-shrink-0 ml-2" />
+                </button>
+              ) : (
+                <input
+                  value={p.name}
+                  onChange={(e) => {
+                    const nb = [...bench];
+                    nb[i] = { ...nb[i], name: e.target.value };
+                    setBench(nb);
+                  }}
+                  maxLength={LIMITS.playerNameMax}
+                  placeholder="Nombre"
+                  className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition"
+                />
+              )}
               <button onClick={() => setBench(bench.filter((_, idx) => idx !== i))} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition flex items-center justify-center flex-shrink-0" aria-label="Quitar suplente">
                 <X size={16} />
               </button>
             </div>
           ))}
         </div>
-        <button onClick={() => setBench([...bench, ''])} className="w-full mt-2 p-3 bg-white border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-600 font-medium flex items-center justify-center gap-1.5 hover:border-brand-green hover:text-brand-green transition">
-          <Plus size={16} /> Añadir suplente
+        <button
+          onClick={() => isHomeTeam ? setPicker({ scope: 'bench', idx: 'new' }) : setBench([...bench, { name: '', number: null }])}
+          className="w-full mt-2 p-3 bg-white border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-600 font-medium flex items-center justify-center gap-1.5 hover:border-brand-green hover:text-brand-green transition"
+        >
+          <Plus size={16} /> Añadir suplente{isHomeTeam ? ' del cole' : ''}
         </button>
         <p className="text-xs text-slate-500 mt-2">Opcional. Durante el partido podrás añadir más y hacer sustituciones.</p>
       </Field>
 
       {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
 
-      <button disabled={!canStart} onClick={handleStart} className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-blue text-white disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500 rounded-2xl font-semibold flex items-center justify-center gap-2 transition mt-4 shadow-card-md">
+      <button disabled={!canStart} onClick={handleStart} className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-green-dark text-white disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500 rounded-2xl font-semibold flex items-center justify-center gap-2 transition mt-4 shadow-card-md">
         <Play size={20} /> {creating ? 'Creando…' : 'Empezar partido'}
       </button>
       <p className="text-xs text-slate-500 text-center mt-3">Recibirás un enlace para compartir con el grupo de padres.</p>
+
+      {picker && (
+        <RosterPickerModal
+          title={picker.scope === 'starter'
+            ? `Elegir ${POSITION_LABELS[picker.idx].toLowerCase()} (${POSITION_SHORT[picker.idx]})`
+            : 'Añadir suplente'}
+          options={availableFromRoster()}
+          onPick={pickFromRoster}
+          onClose={() => setPicker(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Modal genérico que muestra la plantilla del cole para elegir una jugadora
+function RosterPickerModal({ title, options, onPick, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl p-5 w-full max-w-md shadow-card-lg animate-in max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 p-1"><X size={20} /></button>
+        </div>
+        {options.length === 0 ? (
+          <p className="text-sm text-slate-500 text-center py-8">No quedan jugadoras disponibles en la plantilla del cole.</p>
+        ) : (
+          <div className="space-y-2">
+            {options.map((p) => (
+              <button
+                key={`${p.name}-${p.number}`}
+                onClick={() => onPick(p)}
+                className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-left font-medium hover:border-brand-green hover:bg-brand-green-soft/40 transition flex items-center justify-between"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="w-9 h-9 bg-brand-green-soft text-brand-green-dark rounded-lg flex items-center justify-center font-mono font-bold text-sm">{p.number}</span>
+                  <span className="text-slate-900">{p.name}</span>
+                </span>
+                <ChevronLeft size={16} className="rotate-180 text-slate-400" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -441,7 +630,7 @@ function Field({ label, children }) {
 }
 function SelectBtn({ active, onClick, children, variant = 'green' }) {
   const activeClass = variant === 'blue'
-    ? 'bg-brand-blue text-white shadow-card'
+    ? 'bg-brand-green text-white shadow-card'
     : 'bg-brand-green text-white shadow-card';
   return <button onClick={onClick} className={`p-3 rounded-xl font-semibold transition ${active ? activeClass : 'bg-white border border-slate-200 text-slate-700'}`}>{children}</button>;
 }
@@ -621,7 +810,7 @@ function MatchView({ matchId }) {
         <div className="flex items-stretch gap-2">
           <TeamHeader name={match.teamA} sets={setsA} serving={match.server === 'A' && !match.finished} color="green" />
           <div className="flex items-center text-slate-300 text-base font-bold">VS</div>
-          <TeamHeader name={match.teamB} sets={setsB} serving={match.server === 'B' && !match.finished} color="blue" />
+          <TeamHeader name={match.teamB} sets={setsB} serving={match.server === 'B' && !match.finished} color="green-dark" />
         </div>
 
         <MatchTimes match={match} />
@@ -642,6 +831,7 @@ function MatchView({ matchId }) {
         <RosterModal
           positions={match.positions}
           bench={match.bench || []}
+          isHomeTeam={HOME_TEAM_ALIASES.some((a) => match.teamA.toLowerCase().includes(a))}
           onSave={handleSaveRoster}
           onClose={() => setEditingLineup(false)}
         />
@@ -662,9 +852,11 @@ function MatchView({ matchId }) {
 }
 
 function TeamHeader({ name, sets, serving, color }) {
-  const isGreen = color === 'green';
-  const accentText = isGreen ? 'text-brand-green' : 'text-brand-blue';
-  const bg = isGreen ? 'bg-brand-green-soft' : 'bg-brand-blue-soft';
+  // 'green' = local (verde principal), 'green-dark' = visitante (verde oscuro
+  // para diferenciar sin salir de la paleta del cole).
+  const isLocal = color === 'green';
+  const accentText = isLocal ? 'text-brand-green' : 'text-brand-green-dark';
+  const bg = isLocal ? 'bg-brand-green-soft' : 'bg-emerald-50';
   return (
     <div className={`flex-1 p-3 ${bg} rounded-2xl min-w-0`}>
       <div className="flex items-center gap-1 mb-0.5">
@@ -710,7 +902,7 @@ function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
         <>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <ScoreButton name={match.teamA} score={match.currentSet.a} onAdd={() => onPoint('A')} onSubtract={() => onSubtract('A')} color="green" />
-            <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} onSubtract={() => onSubtract('B')} color="blue" />
+            <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} onSubtract={() => onSubtract('B')} color="green-dark" />
           </div>
           <p className="text-[16px] text-slate-500 text-center mb-4 px-4 leading-relaxed">
             Si varios padres pulsan el mismo punto en menos de 10s, solo cuenta una vez.
@@ -741,7 +933,7 @@ function SetRow({ set: s, teamA, teamB }) {
       <div className="flex items-center gap-4 font-mono font-bold text-lg">
         <span className={aWon ? 'text-brand-green' : 'text-slate-400'}>{s.a}</span>
         <span className="text-slate-300">·</span>
-        <span className={!aWon ? 'text-brand-blue' : 'text-slate-400'}>{s.b}</span>
+        <span className={!aWon ? 'text-brand-green-dark' : 'text-slate-400'}>{s.b}</span>
       </div>
     </div>
   );
@@ -751,7 +943,7 @@ function FinishedSummary({ match, onReopen }) {
   const setsA = match.sets.filter((s) => s.a > s.b).length;
   const setsB = match.sets.filter((s) => s.b > s.a).length;
   const winnerName = match.winner === 'A' ? match.teamA : match.teamB;
-  const winnerColor = match.winner === 'A' ? 'text-brand-green' : 'text-brand-blue';
+  const winnerColor = match.winner === 'A' ? 'text-brand-green' : 'text-brand-green-dark';
   const duration = match.endedAt ? formatDuration(match.endedAt - match.startedAt) : null;
   return (
     <div className="px-5 py-8 bg-gradient-to-b from-brand-green-soft/40 to-transparent">
@@ -790,19 +982,22 @@ function FinishedSummary({ match, onReopen }) {
 }
 
 function ScoreButton({ name, score, onAdd, onSubtract, color }) {
-  const isGreen = color === 'green';
-  const bgActive = isGreen ? 'active:from-brand-green active:to-brand-green-dark' : 'active:from-brand-blue active:to-brand-blue-dark';
-  const accent = isGreen ? 'text-brand-green' : 'text-brand-blue';
+  // 'green' = local (verde principal), 'green-dark' = visitante (verde oscuro)
+  const isLocal = color === 'green';
+  const bgActive = isLocal
+    ? 'active:from-brand-green active:to-brand-green-dark'
+    : 'active:from-brand-green-dark active:to-brand-green';
+  const accent = isLocal ? 'text-brand-green' : 'text-brand-green-dark';
   return (
     <div className="rounded-2xl overflow-hidden shadow-card-md flex flex-col">
       <button
         onClick={onAdd}
-        className={`aspect-[3/4] bg-gradient-to-br from-white to-slate-50 border border-slate-200 border-b-0 p-4 flex flex-col justify-between ${bgActive} active:text-white transition`}
+        className={`aspect-[3/4] bg-gradient-to-br from-white to-slate-50 border border-slate-200 border-b-0 p-3 flex flex-col justify-between ${bgActive} active:text-white transition`}
       >
         <div className="text-left">
-          <div className="text-[16px] text-slate-500 uppercase tracking-wider truncate font-bold">{name}</div>
+          <div className="text-[15px] text-slate-500 uppercase tracking-wider truncate font-bold">{name}</div>
         </div>
-        <div className={`text-7xl font-bold text-center my-2 font-mono tabular-nums ${accent}`}>{score}</div>
+        <ScoreNumber score={score} accent={accent} />
         <div className={`flex items-center justify-center gap-1 ${accent} font-bold`}>
           <Plus size={18} /> <span className="text-sm">PUNTO</span>
         </div>
@@ -814,6 +1009,25 @@ function ScoreButton({ name, score, onAdd, onSubtract, color }) {
       >
         <Minus size={13} /> Restar punto
       </button>
+    </div>
+  );
+}
+
+// Renderiza el marcador como columna de dígitos cuando hay más de uno,
+// para garantizar que NUNCA rompe la tarjeta en pantallas estrechas.
+// Un dígito → tamaño máximo. Dos dígitos → uno encima del otro centrado.
+// Tres dígitos (imposible pero a prueba de balas) → también vertical.
+function ScoreNumber({ score, accent }) {
+  const digits = String(score).split('');
+  if (digits.length === 1) {
+    return <div className={`text-7xl font-bold text-center my-2 font-mono tabular-nums leading-none ${accent}`}>{digits[0]}</div>;
+  }
+  // 2+ dígitos: en columna, mismo tamaño cada uno, centrados
+  return (
+    <div className={`flex flex-col items-center justify-center my-1 font-mono tabular-nums leading-[0.85] ${accent}`}>
+      {digits.map((d, i) => (
+        <span key={i} className="text-6xl font-bold">{d}</span>
+      ))}
     </div>
   );
 }
@@ -850,7 +1064,7 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
           <RotateCw size={18} className="text-brand-green" /> Rotar
         </button>
         <button onClick={onEditLineup} className="p-4 bg-white border border-slate-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-slate-700 active:bg-slate-100 transition">
-          <Users size={18} className="text-brand-blue" /> Plantilla
+          <Users size={18} className="text-brand-green-dark" /> Plantilla
         </button>
       </div>
       <p className="text-xs text-slate-500 text-center px-4 leading-relaxed">
@@ -863,14 +1077,19 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
 function CourtCell({ player, index, isServer = false }) {
   const label = POSITION_LABELS[index];
   return (
-    <div className={`aspect-square rounded-2xl flex flex-col items-center justify-center p-2 shadow-card transition ${isServer ? 'bg-gradient-to-br from-brand-green to-brand-blue text-white' : 'bg-white border border-slate-200'}`}>
-      <div className={`text-[15px] font-mono mb-1 font-bold ${isServer ? 'text-white/85' : 'text-slate-400'}`}>
+    <div className={`aspect-square rounded-2xl flex flex-col items-center justify-center p-2 shadow-card transition ${isServer ? 'bg-gradient-to-br from-brand-green to-brand-green-dark text-white' : 'bg-white border border-slate-200'}`}>
+      <div className={`text-[15px] font-mono mb-1 font-bold ${isServer ? 'text-white/85' : 'text-brand-green'}`}>
         {POSITION_SHORT[index]}{isServer && ' 🏐'}
       </div>
       <div className={`text-sm font-bold text-center leading-tight truncate w-full ${isServer ? 'text-white' : 'text-slate-900'}`}>
         {player?.name || '—'}
+        {player?.number != null && (
+          <span className={`ml-1 font-mono text-xs ${isServer ? 'text-white/80' : 'text-brand-green'}`}>
+            #{player.number}
+          </span>
+        )}
       </div>
-      <div className={`text-[14px] font-medium mt-0.5 ${isServer ? 'text-white/70' : 'text-slate-400'}`}>
+      <div className={`text-[14px] font-medium mt-0.5 ${isServer ? 'text-white/80' : 'text-brand-green/70'}`}>
         {label}
       </div>
     </div>
@@ -881,7 +1100,7 @@ function CourtCell({ player, index, isServer = false }) {
 function ConfirmModal({ title, message, confirmText, cancelText = 'Cancelar', variant = 'primary', onConfirm, onClose }) {
   const confirmClass = variant === 'danger'
     ? 'bg-red-500 hover:bg-red-600'
-    : 'bg-gradient-to-r from-brand-green to-brand-blue';
+    : 'bg-gradient-to-r from-brand-green to-brand-green-dark';
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-3xl p-5 w-full max-w-md shadow-card-lg animate-in" onClick={(e) => e.stopPropagation()}>
@@ -901,27 +1120,58 @@ function ConfirmModal({ title, message, confirmText, cancelText = 'Cancelar', va
 }
 
 // ============ MODAL PLANTILLA con sustituciones ============
-function RosterModal({ positions, bench, onSave, onClose }) {
-  // Estado de trabajo local: titulares + banquillo
-  const [court, setCourt] = useState(positions.map((p) => ({ name: p?.name || '' })));
-  const [benchList, setBench] = useState((bench || []).map((p) => ({ name: p?.name || '' })));
-  const [swapping, setSwapping] = useState(null); // índice del titular que sale, o null
-  const [renamingIdx, setRenamingIdx] = useState(null); // índice del titular en modo rename
+// Acepta isHomeTeam para mostrar selectores de la plantilla del cole.
+function RosterModal({ positions, bench, onSave, onClose, isHomeTeam = false }) {
+  // Estado de trabajo local: titulares + banquillo (objetos completos)
+  // Clonamos en profundidad para preservar todas las propiedades (name, number, ...)
+  const [court, setCourt] = useState(() => positions.map((p) => ({ ...(p || {}) })));
+  const [benchList, setBench] = useState(() => (bench || []).map((p) => ({ ...(p || {}) })));
+  const [swapping, setSwapping] = useState(null);
+  const [renamingIdx, setRenamingIdx] = useState(null);
+  const [picker, setPicker] = useState(null); // {scope: 'starter'|'bench', idx}
+
+  // Jugadoras del cole no usadas ni en campo ni en banquillo
+  const availableFromRoster = () => {
+    const used = new Set();
+    [...court, ...benchList].forEach((p) => {
+      if (p.name?.trim()) used.add(`${p.name.trim()}|${p.number ?? ''}`);
+    });
+    return SANTA_ANA_ROSTER.filter((p) => !used.has(`${p.name}|${p.number}`));
+  };
 
   const handleSubstitute = (incomingIdx) => {
     if (swapping === null) return;
-    const outgoing = court[swapping];
-    const incoming = benchList[incomingIdx];
+    const outgoing = { ...court[swapping] };
+    const incoming = { ...benchList[incomingIdx] };
     const newCourt = [...court];
     newCourt[swapping] = incoming;
     const newBench = benchList.filter((_, i) => i !== incomingIdx);
-    if (outgoing.name) newBench.push(outgoing);
+    if (outgoing.name?.trim()) newBench.push(outgoing);
     setCourt(newCourt);
     setBench(newBench);
     setSwapping(null);
   };
 
-  const addBenchPlayer = () => setBench([...benchList, { name: '' }]);
+  const handlePick = (pickedPlayer) => {
+    if (!picker) return;
+    if (picker.scope === 'starter') {
+      const previous = { ...court[picker.idx] };
+      const nc = [...court];
+      nc[picker.idx] = { ...pickedPlayer };
+      // Si estaba en banquillo, lo quitamos de allí
+      const nb = benchList.filter(
+        (b) => !(b.name === pickedPlayer.name && b.number === pickedPlayer.number)
+      );
+      if (previous.name?.trim()) nb.push(previous);
+      setCourt(nc);
+      setBench(nb);
+    } else if (picker.scope === 'bench') {
+      setBench([...benchList, { ...pickedPlayer }]);
+    }
+    setPicker(null);
+  };
+
+  const addBenchPlayer = () => setBench([...benchList, { name: '', number: null }]);
   const updateBenchName = (i, name) => {
     const nb = [...benchList];
     nb[i] = { ...nb[i], name };
@@ -936,8 +1186,18 @@ function RosterModal({ positions, bench, onSave, onClose }) {
   };
 
   const save = () => {
-    const newPositions = court.map((p, i) => ({ name: (p.name || '').trim() || POSITION_SHORT[i] }));
-    const newBench = benchList.map((p) => ({ name: (p.name || '').trim() })).filter((p) => p.name);
+    // Conservamos TODAS las propiedades (name, number, ...) y solo
+    // garantizamos que name nunca esté vacío para los titulares.
+    const newPositions = court.map((p, i) => {
+      const trimmedName = (p.name || '').trim();
+      return {
+        ...p,
+        name: trimmedName || POSITION_SHORT[i],
+      };
+    });
+    const newBench = benchList
+      .map((p) => ({ ...p, name: (p.name || '').trim() }))
+      .filter((p) => p.name);
     onSave(newPositions, newBench);
   };
 
@@ -952,17 +1212,20 @@ function RosterModal({ positions, bench, onSave, onClose }) {
         </div>
 
         {swapping !== null ? (
-          // Selector de quién entra
+          // Selector de quién entra desde el banquillo
           <>
-            <p className="text-sm text-slate-700 mb-1">Sale: <span className="font-semibold">{court[swapping]?.name || '—'}</span></p>
+            <p className="text-sm text-slate-700 mb-1">Sale: <span className="font-semibold">{court[swapping]?.name || '—'}</span>{court[swapping]?.number != null && <span className="text-brand-green ml-1 font-mono">#{court[swapping].number}</span>}</p>
             <p className="text-xs text-slate-500 mb-4">¿Quién entra por {POSITION_LABELS[swapping]} ({POSITION_SHORT[swapping]})?</p>
             <div className="space-y-2 mb-3">
               {benchList.length === 0 && (
                 <p className="text-sm text-slate-400 italic text-center py-6">No hay suplentes disponibles. Añade alguna en el banquillo.</p>
               )}
               {benchList.map((p, i) => (
-                <button key={i} disabled={!p.name.trim()} onClick={() => handleSubstitute(i)} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-left font-medium hover:border-brand-green hover:bg-brand-green-soft/40 disabled:opacity-40 transition flex items-center justify-between">
-                  <span className="truncate">{p.name.trim() || '(sin nombre)'}</span>
+                <button key={i} disabled={!p.name?.trim()} onClick={() => handleSubstitute(i)} className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-left font-medium hover:border-brand-green hover:bg-brand-green-soft/40 disabled:opacity-40 transition flex items-center justify-between">
+                  <span className="truncate flex items-center gap-2">
+                    {p.number != null && <span className="font-mono text-xs text-brand-green-dark bg-brand-green-soft px-2 py-0.5 rounded">#{p.number}</span>}
+                    {p.name?.trim() || '(sin nombre)'}
+                  </span>
                   <ChevronLeft size={16} className="rotate-180 text-slate-400" />
                 </button>
               ))}
@@ -978,24 +1241,39 @@ function RosterModal({ positions, bench, onSave, onClose }) {
                 <div key={i} className="flex items-center gap-2">
                   <div className="w-14 h-14 rounded-xl bg-brand-green-soft flex flex-col items-center justify-center font-bold text-brand-green flex-shrink-0">
                     <div className="text-xs leading-none">{POSITION_SHORT[i]}</div>
-                    <div className="text-[14px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
+                    <div className="text-[9px] font-medium leading-none mt-0.5 px-1 text-center">{POSITION_LABELS[i]}</div>
                   </div>
                   {renamingIdx === i ? (
                     <input
                       autoFocus
-                      value={p.name}
+                      value={p.name || ''}
                       onChange={(e) => updateCourtName(i, e.target.value)}
                       onBlur={() => setRenamingIdx(null)}
                       onKeyDown={(e) => e.key === 'Enter' && setRenamingIdx(null)}
                       maxLength={LIMITS.playerNameMax}
                       className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-green"
                     />
+                  ) : isHomeTeam ? (
+                    <button
+                      onClick={() => setPicker({ scope: 'starter', idx: i })}
+                      className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-left font-medium truncate flex items-center justify-between"
+                    >
+                      <span className={p.name ? 'text-slate-900' : 'text-slate-400 italic'}>
+                        {p.name ? (
+                          <>
+                            {p.name}
+                            {p.number != null && <span className="ml-2 font-mono text-sm text-brand-green-dark">#{p.number}</span>}
+                          </>
+                        ) : 'Sin asignar'}
+                      </span>
+                      <ChevronLeft size={14} className="rotate-180 text-slate-400 flex-shrink-0" />
+                    </button>
                   ) : (
                     <button onClick={() => setRenamingIdx(i)} className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-left font-medium truncate">
                       {p.name || <span className="text-slate-400 italic">Sin nombre</span>}
                     </button>
                   )}
-                  <button onClick={() => setSwapping(i)} className="px-3 h-12 rounded-xl bg-brand-blue-soft text-brand-blue-dark font-semibold text-sm flex items-center gap-1 flex-shrink-0">
+                  <button onClick={() => setSwapping(i)} className="px-3 h-12 rounded-xl bg-brand-green-soft text-brand-green-dark font-semibold text-sm flex items-center gap-1 flex-shrink-0">
                     <RotateCw size={14} /> Sub
                   </button>
                 </div>
@@ -1006,9 +1284,12 @@ function RosterModal({ positions, bench, onSave, onClose }) {
             <div className="space-y-2 mb-2">
               {benchList.map((p, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold flex-shrink-0">S{i + 1}</div>
+                  <div className="w-14 h-14 rounded-xl bg-slate-100 flex flex-col items-center justify-center text-slate-500 flex-shrink-0">
+                    <div className="text-xs font-bold leading-none">S{i + 1}</div>
+                    {p.number != null && <div className="text-[10px] font-mono text-brand-green-dark mt-0.5">#{p.number}</div>}
+                  </div>
                   <input
-                    value={p.name}
+                    value={p.name || ''}
                     onChange={(e) => updateBenchName(i, e.target.value)}
                     maxLength={LIMITS.playerNameMax}
                     placeholder="Nombre"
@@ -1020,19 +1301,39 @@ function RosterModal({ positions, bench, onSave, onClose }) {
                 </div>
               ))}
             </div>
-            <button onClick={addBenchPlayer} className="w-full mb-5 p-3 bg-white border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-600 font-medium flex items-center justify-center gap-1.5 hover:border-brand-green hover:text-brand-green transition">
-              <Plus size={16} /> Añadir suplente
-            </button>
+            <div className="grid gap-2 mb-5">
+              {isHomeTeam ? (
+                <button onClick={() => setPicker({ scope: 'bench', idx: 'new' })} className="w-full p-3 bg-brand-green-soft border-2 border-dashed border-brand-green/30 rounded-xl text-sm text-brand-green-dark font-medium flex items-center justify-center gap-1.5 hover:border-brand-green hover:bg-brand-green-soft/70 transition">
+                  <Plus size={16} /> Añadir suplente del cole
+                </button>
+              ) : (
+                <button onClick={addBenchPlayer} className="w-full p-3 bg-white border-2 border-dashed border-slate-300 rounded-xl text-sm text-slate-600 font-medium flex items-center justify-center gap-1.5 hover:border-brand-green hover:text-brand-green transition">
+                  <Plus size={16} /> Añadir suplente
+                </button>
+              )}
+            </div>
 
-            <button onClick={save} className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-blue text-white rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card-md">
+            <button onClick={save} className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-green-dark text-white rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card-md">
               <Check size={18} /> Guardar
             </button>
           </>
+        )}
+
+        {picker && (
+          <RosterPickerModal
+            title={picker.scope === 'starter'
+              ? `Cambiar ${POSITION_LABELS[picker.idx].toLowerCase()} (${POSITION_SHORT[picker.idx]})`
+              : 'Añadir suplente del cole'}
+            options={availableFromRoster()}
+            onPick={handlePick}
+            onClose={() => setPicker(null)}
+          />
         )}
       </div>
     </div>
   );
 }
+
 
 // ============ HISTORY ============
 function HistoryView({ userId }) {
