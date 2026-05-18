@@ -774,12 +774,13 @@ function MatchView({ matchId }) {
     finally { setSyncing(false); }
   };
 
-  const handleSaveRoster = async (newPositions, newBench) => {
+  const handleSaveRoster = async (newPositions, newBench, opts = {}) => {
     setSyncing(true);
     try {
       setMatch(await updateRoster(matchId, newPositions, newBench));
-      setEditingLineup(false);
-      // El toast lo dispara el useEffect que detecta cambio de positions
+      if (!opts.keepOpen) setEditingLineup(false);
+      if (opts.keepOpen) showToast('Sustitución aplicada ✓', 'success');
+      // El toast de cambio general lo dispara el useEffect que detecta cambio de positions
     } catch (e) { showToast('No se pudo guardar', 'error'); }
     finally { setSyncing(false); }
   };
@@ -1165,25 +1166,49 @@ function RosterModal({ positions, bench, onSave, onClose }) {
     setCourt(newCourt);
     setBench(newBench);
     setSwapping(null);
+    // Persistir INMEDIATAMENTE a la BD para que la sustitución se vea en la
+    // vista Rotación sin necesidad de pulsar "Guardar". Antes esta acción
+    // solo cambiaba el estado local del modal y, si el usuario cerraba sin
+    // guardar, la sustitución no se aplicaba en la cancha. Ahora cada Sub
+    // se aplica a la BD al instante (idempotente y barato).
+    const persistedPositions = newCourt.map((p, i) => ({
+      ...(p || {}),
+      name: ((p && p.name) || '').trim() || POSITION_SHORT[i],
+    }));
+    const persistedBench = newBench
+      .map((p) => ({ ...p, name: (p.name || '').trim() }))
+      .filter((p) => p.name);
+    onSave(persistedPositions, persistedBench, { keepOpen: true });
   };
 
   const handlePick = (pickedPlayer) => {
     if (!picker) return;
+    let nc = court;
+    let nb = benchList;
     if (picker.scope === 'starter') {
       const previous = { ...court[picker.idx] };
-      const nc = [...court];
+      nc = [...court];
       nc[picker.idx] = { ...pickedPlayer };
-      // Si estaba en banquillo, lo quitamos de allí
-      const nb = benchList.filter(
+      nb = benchList.filter(
         (b) => !(b.name === pickedPlayer.name && b.number === pickedPlayer.number)
       );
-      if (previous.name?.trim()) nb.push(previous);
+      if (previous.name?.trim()) nb = [...nb, previous];
       setCourt(nc);
       setBench(nb);
     } else if (picker.scope === 'bench') {
-      setBench([...benchList, { ...pickedPlayer }]);
+      nb = [...benchList, { ...pickedPlayer }];
+      setBench(nb);
     }
     setPicker(null);
+    // Persistir cambio inmediato a BD (mismo motivo que en handleSubstitute)
+    const persistedPositions = nc.map((p, i) => ({
+      ...(p || {}),
+      name: ((p && p.name) || '').trim() || POSITION_SHORT[i],
+    }));
+    const persistedBench = nb
+      .map((p) => ({ ...p, name: (p.name || '').trim() }))
+      .filter((p) => p.name);
+    onSave(persistedPositions, persistedBench, { keepOpen: true });
   };
 
   const addBenchPlayer = () => setBench([...benchList, { name: '', number: null }]);
