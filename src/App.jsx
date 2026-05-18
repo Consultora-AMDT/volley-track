@@ -1087,21 +1087,21 @@ function CourtCell({ player, index, isServer = false }) {
   const label = POSITION_LABELS[index];
   return (
     <div className={`aspect-square rounded-2xl flex flex-col items-center justify-center px-1.5 py-2 shadow-card transition ${isServer ? 'bg-gradient-to-br from-brand-green to-brand-green-dark text-white' : 'bg-white border border-slate-200'}`}>
-      <div className={`text-[13px] font-mono font-bold leading-none ${isServer ? 'text-white/85' : 'text-brand-green'}`}>
+      <div className={`text-[15px] font-mono font-bold leading-none ${isServer ? 'text-white/85' : 'text-brand-green'}`}>
         {POSITION_SHORT[index]}{isServer && ' 🏐'}
       </div>
       {/* Nombre: wrap natural, break-words por si algún nombre carece de espacios.
           Sin truncate (antes cortaba con "..." hasta nombres cortos como "Lucia"
           porque la celda es aspect-square pequeña). */}
-      <div className={`text-[13px] font-bold text-center leading-[1.05] mt-1 w-full break-words hyphens-auto ${isServer ? 'text-white' : 'text-slate-900'}`}>
+      <div className={`text-[15px] font-bold text-center leading-[1.1] mt-1 w-full break-words hyphens-auto ${isServer ? 'text-white' : 'text-slate-900'}`}>
         {player?.name || '—'}
       </div>
       {player?.number != null && (
-        <div className={`font-mono text-[11px] leading-none mt-0.5 ${isServer ? 'text-white/80' : 'text-brand-green'}`}>
+        <div className={`font-mono text-[13px] leading-none mt-1 ${isServer ? 'text-white/80' : 'text-brand-green'}`}>
           #{player.number}
         </div>
       )}
-      <div className={`text-[11px] font-medium leading-none mt-1 ${isServer ? 'text-white/80' : 'text-brand-green/70'}`}>
+      <div className={`text-[13px] font-medium leading-none mt-1 ${isServer ? 'text-white/80' : 'text-brand-green/70'}`}>
         {label}
       </div>
     </div>
