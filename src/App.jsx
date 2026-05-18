@@ -328,7 +328,7 @@ function MatchCard({ match, userId, onClick, onDelete }) {
         <button
           onClick={() => onDelete(match)}
           aria-label="Eliminar partido"
-          className="flex-shrink-0 px-3 my-3 mr-2 ml-1 border-l border-slate-100 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition flex items-center justify-center"
+          className="flex-shrink-0 px-3 my-3 mr-2 ml-1 border-l border-slate-100 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition flex items-center justify-center"
         >
           <Trash2 size={16} />
         </button>
@@ -486,7 +486,7 @@ function SetupView({ userId }) {
         <div className="flex gap-2 flex-shrink-0">
           <button onClick={loadRoster} className="px-3 py-2 bg-brand-green text-white rounded-xl text-xs font-bold shadow-card">Cargar</button>
           {(starters.some((p) => p.name) || bench.length > 0) && (
-            <button onClick={clearAll} className="px-3 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-medium">Vaciar</button>
+            <button onClick={clearAll} className="px-3 py-2 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-xs font-medium">Vaciar</button>
           )}
         </div>
       </div>
@@ -1017,7 +1017,7 @@ function ScoreButton({ name, score, onAdd, onSubtract, color }) {
       <button
         onClick={onSubtract}
         disabled={score === 0}
-        className="w-full py-2.5 bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-30 text-xs font-medium flex items-center justify-center gap-1 border border-t-0 border-slate-200 rounded-b-2xl transition"
+        className="w-full py-2.5 bg-red-50 text-red-500 hover:bg-red-100 disabled:opacity-30 disabled:text-slate-400 disabled:bg-slate-100 text-xs font-medium flex items-center justify-center gap-1 border border-t-0 border-red-200 rounded-b-2xl transition"
       >
         <Minus size={13} /> Restar punto
       </button>
