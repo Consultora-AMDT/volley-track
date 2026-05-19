@@ -306,6 +306,66 @@ function isSantaAnaName(name) {
   return n.includes('santa ana') || n.includes('san rafael');
 }
 
+// Asigna colores a los dos equipos del partido. El cole (Santa Ana o
+// San Rafael) siempre va en VERDE; el rival siempre va en AZUL. Si por
+// algún motivo ninguno encaja con el cole (o lo hacen ambos), caemos
+// al esquema anterior (verde claro / verde oscuro) para que la UI no
+// quede plana.
+//   Returns: [colorA, colorB] con valores 'green' | 'blue' | 'green-dark'.
+function teamColorPair(teamA, teamB) {
+  const aIsSantaAna = isSantaAnaName(teamA);
+  const bIsSantaAna = isSantaAnaName(teamB);
+  if (aIsSantaAna && !bIsSantaAna) return ['green', 'blue'];
+  if (bIsSantaAna && !aIsSantaAna) return ['blue', 'green'];
+  return ['green', 'green-dark'];
+}
+
+// Devuelve las clases Tailwind concretas asociadas a un color de equipo.
+// Centraliza el mapping color → clases para que TeamHeader, ScoreButton,
+// CourtCell y FinishedSummary compartan la misma paleta sin repetir
+// strings hardcodeados (que además romperían el JIT de Tailwind si se
+// construyen dinámicamente).
+function colorTokens(color) {
+  if (color === 'blue') {
+    return {
+      text: 'text-brand-blue',
+      textDark: 'text-brand-blue-dark',
+      bgSoft: 'bg-brand-blue-soft',
+      gradient: 'bg-gradient-to-br from-brand-blue to-brand-blue-dark',
+      gradientSoft: 'bg-gradient-to-b from-brand-blue-soft/40 to-transparent',
+      activeFrom: 'active:from-brand-blue',
+      activeTo: 'active:to-brand-blue-dark',
+      border: 'border-brand-blue/20',
+    };
+  }
+  if (color === 'green-dark') {
+    // Fallback: equipo visitante cuando ninguno es el cole. Tono verde
+    // oscuro para diferenciar visualmente del local sin salir de la
+    // paleta del cole.
+    return {
+      text: 'text-brand-green-dark',
+      textDark: 'text-brand-green-dark',
+      bgSoft: 'bg-emerald-50',
+      gradient: 'bg-gradient-to-br from-brand-green-dark to-brand-green',
+      gradientSoft: 'bg-gradient-to-b from-emerald-50/60 to-transparent',
+      activeFrom: 'active:from-brand-green-dark',
+      activeTo: 'active:to-brand-green',
+      border: 'border-brand-green/20',
+    };
+  }
+  // 'green' por defecto: equipo del cole (Santa Ana / San Rafael).
+  return {
+    text: 'text-brand-green',
+    textDark: 'text-brand-green-dark',
+    bgSoft: 'bg-brand-green-soft',
+    gradient: 'bg-gradient-to-br from-brand-green to-brand-green-dark',
+    gradientSoft: 'bg-gradient-to-b from-brand-green-soft/40 to-transparent',
+    activeFrom: 'active:from-brand-green',
+    activeTo: 'active:to-brand-green-dark',
+    border: 'border-brand-green/20',
+  };
+}
+
 function MatchCard({ match, userId, onClick, onDelete }) {
   const sets = uniqueSetsByNumber(match.sets);
   const setsA = sets.filter((s) => s.a > s.b).length;
@@ -317,22 +377,27 @@ function MatchCard({ match, userId, onClick, onDelete }) {
   const santaAnaWon =
     (wonA && isSantaAnaName(match.teamA)) ||
     (wonB && isSantaAnaName(match.teamB));
+  // Colores base de cada equipo (verde = cole, azul = rival). Si ninguno
+  // es el cole se usa el esquema verde claro/oscuro.
+  const [colorA, colorB] = teamColorPair(match.teamA, match.teamB);
+  const ta = colorTokens(colorA);
+  const tb = colorTokens(colorB);
   return (
     <div className={`w-full rounded-2xl mb-2 shadow-card hover:shadow-card-md transition flex items-stretch ${santaAnaWon ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-300' : 'bg-white border border-slate-200'}`}>
       <button onClick={onClick} className="flex-1 text-left p-4 min-w-0">
         <div className="flex items-center justify-between mb-1.5 gap-2">
-          <span className={`font-semibold truncate flex items-center gap-1.5 ${wonA ? (santaAnaWon ? 'text-amber-800' : 'text-brand-green') : 'text-slate-900'}`}>
+          <span className={`font-semibold truncate flex items-center gap-1.5 ${wonA ? (santaAnaWon ? 'text-amber-800' : ta.text) : 'text-slate-900'}`}>
             {wonA && santaAnaWon && <Trophy size={16} className="text-amber-500 flex-shrink-0" />}
             <span className="truncate">{match.teamA}</span>
           </span>
-          <span className={`font-bold text-xl tabular-nums flex-shrink-0 ${wonA ? (santaAnaWon ? 'text-amber-800' : 'text-brand-green') : 'text-slate-400'}`}>{setsA}</span>
+          <span className={`font-bold text-xl tabular-nums flex-shrink-0 ${wonA ? (santaAnaWon ? 'text-amber-800' : ta.text) : 'text-slate-400'}`}>{setsA}</span>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className={`truncate flex items-center gap-1.5 ${wonB ? (santaAnaWon ? 'text-amber-800 font-semibold' : 'text-brand-green-dark font-semibold') : 'text-slate-700'}`}>
+          <span className={`truncate flex items-center gap-1.5 ${wonB ? (santaAnaWon ? 'text-amber-800 font-semibold' : `${tb.text} font-semibold`) : 'text-slate-700'}`}>
             {wonB && santaAnaWon && <Trophy size={16} className="text-amber-500 flex-shrink-0" />}
             <span className="truncate">{match.teamB}</span>
           </span>
-          <span className={`font-bold text-xl tabular-nums flex-shrink-0 ${wonB ? (santaAnaWon ? 'text-amber-800' : 'text-brand-green-dark') : 'text-slate-400'}`}>{setsB}</span>
+          <span className={`font-bold text-xl tabular-nums flex-shrink-0 ${wonB ? (santaAnaWon ? 'text-amber-800' : tb.text) : 'text-slate-400'}`}>{setsB}</span>
         </div>
         <div className="text-xs text-slate-500 mt-2 flex items-center gap-2 font-normal flex-wrap">
           {new Date(match.startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -1049,6 +1114,7 @@ function MatchView({ matchId }) {
   const sets = uniqueSetsByNumber(match.sets);
   const setsA = sets.filter((s) => s.a > s.b).length;
   const setsB = sets.filter((s) => s.b > s.a).length;
+  const [colorA, colorB] = teamColorPair(match.teamA, match.teamB);
 
   return (
     <div>
@@ -1074,9 +1140,9 @@ function MatchView({ matchId }) {
         </div>
 
         <div className="flex items-stretch gap-2">
-          <TeamHeader name={match.teamA} sets={setsA} serving={match.server === 'A' && !match.finished} color="green" />
+          <TeamHeader name={match.teamA} sets={setsA} serving={match.server === 'A' && !match.finished} color={colorA} />
           <div className="flex items-center text-slate-300 text-base font-bold">VS</div>
-          <TeamHeader name={match.teamB} sets={setsB} serving={match.server === 'B' && !match.finished} color="green-dark" />
+          <TeamHeader name={match.teamB} sets={setsB} serving={match.server === 'B' && !match.finished} color={colorB} />
         </div>
 
         {/* Banner: equipo ha ganado el partido pero seguimos jugando hasta
@@ -1185,18 +1251,14 @@ function MatchView({ matchId }) {
 }
 
 function TeamHeader({ name, sets, serving, color }) {
-  // 'green' = local (verde principal), 'green-dark' = visitante (verde oscuro
-  // para diferenciar sin salir de la paleta del cole).
-  const isLocal = color === 'green';
-  const accentText = isLocal ? 'text-brand-green' : 'text-brand-green-dark';
-  const bg = isLocal ? 'bg-brand-green-soft' : 'bg-emerald-50';
+  const t = colorTokens(color);
   return (
-    <div className={`flex-1 p-3 ${bg} rounded-2xl min-w-0`}>
+    <div className={`flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0`}>
       <div className="flex items-center gap-1 mb-0.5">
         {serving && <span className="text-base">🏐</span>}
         <span className="font-semibold text-slate-900 truncate text-sm">{name}</span>
       </div>
-      <div className={`text-3xl font-bold tabular-nums ${accentText}`}>{sets}</div>
+      <div className={`text-3xl font-bold tabular-nums ${t.text}`}>{sets}</div>
       <div className="text-[15px] text-slate-500 uppercase tracking-wide font-semibold">sets</div>
     </div>
   );
@@ -1227,6 +1289,7 @@ function TabBtn({ active, onClick, children }) {
 }
 
 function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
+  const [colorA, colorB] = teamColorPair(match.teamA, match.teamB);
   return (
     <div className="px-5 py-6 bg-slate-50">
       {match.finished ? (
@@ -1234,8 +1297,8 @@ function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <ScoreButton name={match.teamA} score={match.currentSet.a} onAdd={() => onPoint('A')} onSubtract={() => onSubtract('A')} color="green" />
-            <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} onSubtract={() => onSubtract('B')} color="green-dark" />
+            <ScoreButton name={match.teamA} score={match.currentSet.a} onAdd={() => onPoint('A')} onSubtract={() => onSubtract('A')} color={colorA} />
+            <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} onSubtract={() => onSubtract('B')} color={colorB} />
           </div>
           <p className="text-[16px] text-slate-500 text-center mb-4 px-4 leading-relaxed">
             Si varios padres pulsan el mismo punto en menos de 10s, solo cuenta una vez.
@@ -1251,7 +1314,7 @@ function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
         <div className="mt-8">
           <h3 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3">Sets jugados</h3>
           <div className="space-y-2">
-            {uniqueSetsByNumber(match.sets).map((s) => <SetRow key={s.number} set={s} teamA={match.teamA} teamB={match.teamB} />)}
+            {uniqueSetsByNumber(match.sets).map((s) => <SetRow key={s.number} set={s} teamA={match.teamA} teamB={match.teamB} colorA={colorA} colorB={colorB} />)}
           </div>
         </div>
       )}
@@ -1259,15 +1322,22 @@ function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
   );
 }
 
-function SetRow({ set: s, teamA, teamB }) {
+function SetRow({ set: s, teamA, teamB, colorA, colorB }) {
+  // Si no nos pasan colores, los calculamos para mantener compatibilidad
+  // con las llamadas que aún no pasen el par.
+  const [resolvedA, resolvedB] = colorA && colorB
+    ? [colorA, colorB]
+    : teamColorPair(teamA, teamB);
   const aWon = s.a > s.b;
+  const ta = colorTokens(resolvedA);
+  const tb = colorTokens(resolvedB);
   return (
     <div className="flex items-center justify-between p-3.5 bg-white rounded-xl border border-slate-200 shadow-card">
       <span className="text-slate-400 text-xs uppercase tracking-wide font-bold">Set {s.number}</span>
       <div className="flex items-center gap-4 font-mono font-bold text-lg">
-        <span className={aWon ? 'text-brand-green' : 'text-slate-400'}>{s.a}</span>
+        <span className={aWon ? ta.text : 'text-slate-400'}>{s.a}</span>
         <span className="text-slate-300">·</span>
-        <span className={!aWon ? 'text-brand-green-dark' : 'text-slate-400'}>{s.b}</span>
+        <span className={!aWon ? tb.text : 'text-slate-400'}>{s.b}</span>
       </div>
     </div>
   );
@@ -1278,14 +1348,17 @@ function FinishedSummary({ match, onReopen }) {
   const setsA = sets.filter((s) => s.a > s.b).length;
   const setsB = sets.filter((s) => s.b > s.a).length;
   const winnerName = match.winner === 'A' ? match.teamA : match.teamB;
-  const winnerColor = match.winner === 'A' ? 'text-brand-green' : 'text-brand-green-dark';
+  // Color del ganador según el esquema (Santa Ana = verde, rival = azul).
+  const [colorA, colorB] = teamColorPair(match.teamA, match.teamB);
+  const winnerColor = match.winner === 'A' ? colorA : colorB;
+  const wt = colorTokens(winnerColor);
   const duration = match.endedAt ? formatDuration(match.endedAt - match.startedAt) : null;
   return (
-    <div className="px-5 py-8 bg-gradient-to-b from-brand-green-soft/40 to-transparent">
+    <div className={`px-5 py-8 ${wt.gradientSoft}`}>
       <div className="text-center py-4">
-        <Trophy size={48} className={`mx-auto mb-3 ${winnerColor}`} />
+        <Trophy size={48} className={`mx-auto mb-3 ${wt.text}`} />
         <div className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1">Ganador</div>
-        <h2 className={`text-2xl font-bold mb-2 ${winnerColor}`}>{winnerName}</h2>
+        <h2 className={`text-2xl font-bold mb-2 ${wt.text}`}>{winnerName}</h2>
         <div className="text-3xl font-bold text-slate-900 tabular-nums">{setsA}–{setsB}</div>
         <div className="text-xs text-slate-500 mt-3 flex items-center justify-center gap-2 flex-wrap">
           <span>{new Date(match.startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
@@ -1300,7 +1373,7 @@ function FinishedSummary({ match, onReopen }) {
       <div className="mt-6">
         <h3 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3 text-center">Sets</h3>
         <div className="space-y-2">
-          {sets.map((s) => <SetRow key={s.number} set={s} teamA={match.teamA} teamB={match.teamB} />)}
+          {sets.map((s) => <SetRow key={s.number} set={s} teamA={match.teamA} teamB={match.teamB} colorA={colorA} colorB={colorB} />)}
         </div>
       </div>
 
@@ -1317,23 +1390,18 @@ function FinishedSummary({ match, onReopen }) {
 }
 
 function ScoreButton({ name, score, onAdd, onSubtract, color }) {
-  // 'green' = local (verde principal), 'green-dark' = visitante (verde oscuro)
-  const isLocal = color === 'green';
-  const bgActive = isLocal
-    ? 'active:from-brand-green active:to-brand-green-dark'
-    : 'active:from-brand-green-dark active:to-brand-green';
-  const accent = isLocal ? 'text-brand-green' : 'text-brand-green-dark';
+  const t = colorTokens(color);
   return (
     <div className="rounded-2xl overflow-hidden shadow-card-md flex flex-col">
       <button
         onClick={onAdd}
-        className={`aspect-[3/4] bg-gradient-to-br from-white to-slate-50 border border-slate-200 border-b-0 p-3 flex flex-col justify-between ${bgActive} active:text-white transition`}
+        className={`aspect-[3/4] bg-gradient-to-br from-white to-slate-50 border border-slate-200 border-b-0 p-3 flex flex-col justify-between ${t.activeFrom} ${t.activeTo} active:text-white transition`}
       >
         <div className="text-left">
           <div className="text-[15px] text-slate-500 uppercase tracking-wider truncate font-bold">{name}</div>
         </div>
-        <ScoreNumber score={score} accent={accent} />
-        <div className={`flex items-center justify-center gap-1 ${accent} font-bold`}>
+        <ScoreNumber score={score} accent={t.text} />
+        <div className={`flex items-center justify-center gap-1 ${t.text} font-bold`}>
           <Plus size={18} /> <span className="text-sm">PUNTO</span>
         </div>
       </button>
@@ -1367,6 +1435,10 @@ function RotationTab({ match, flash, onRotate, onEditLineup, onCellClick }) {
   const pos = match.positions || [];
   const isServingA = match.server === 'A' && !match.finished;
   const streak = isServingA ? (match.serveStreak || 0) : 0;
+  // El campo siempre representa al equipo local (A). Su color sigue al
+  // del cole si A es Santa Ana, o al azul si A es el rival.
+  const [colorA] = teamColorPair(match.teamA, match.teamB);
+  const ta = colorTokens(colorA);
   // Layout en rombo 3x3:
   //   .  P3 .
   //   P2 .  P4
@@ -1375,23 +1447,23 @@ function RotationTab({ match, flash, onRotate, onEditLineup, onCellClick }) {
   return (
     <div className="px-5 py-6 bg-slate-50">
       <div className="text-[16px] uppercase tracking-widest text-slate-400 mb-2 text-center font-bold">Red ▲</div>
-      <div className={`bg-gradient-to-b from-brand-green-soft to-white border border-brand-green/20 rounded-3xl p-5 mb-6 shadow-card ${flash ? 'animate-rotation-flash' : ''}`}>
+      <div className={`bg-gradient-to-b ${colorA === 'blue' ? 'from-brand-blue-soft' : 'from-brand-green-soft'} to-white ${ta.border} border rounded-3xl p-5 mb-6 shadow-card ${flash ? 'animate-rotation-flash' : ''}`}>
         <div className="grid grid-cols-3 gap-2">
           {/* Fila 1: solo P3 centro */}
           <div />
-          <CourtCell player={pos[2]} index={2} onClick={onCellClick ? () => onCellClick(2) : undefined} />
+          <CourtCell player={pos[2]} index={2} color={colorA} onClick={onCellClick ? () => onCellClick(2) : undefined} />
           <div />
           {/* Fila 2: P2 izquierda, vacío, P4 derecha */}
-          <CourtCell player={pos[1]} index={1} onClick={onCellClick ? () => onCellClick(1) : undefined} />
+          <CourtCell player={pos[1]} index={1} color={colorA} onClick={onCellClick ? () => onCellClick(1) : undefined} />
           <div className="flex items-center justify-center text-[15px] text-slate-400 font-medium">CAMPO</div>
-          <CourtCell player={pos[3]} index={3} onClick={onCellClick ? () => onCellClick(3) : undefined} />
+          <CourtCell player={pos[3]} index={3} color={colorA} onClick={onCellClick ? () => onCellClick(3) : undefined} />
           {/* Fila 3: solo P1 saque */}
           <div />
-          <CourtCell player={pos[0]} index={0} isServer={isServingA} onClick={onCellClick ? () => onCellClick(0) : undefined} />
+          <CourtCell player={pos[0]} index={0} color={colorA} isServer={isServingA} onClick={onCellClick ? () => onCellClick(0) : undefined} />
           <div />
         </div>
         {isServingA && streak > 0 && (
-          <div className="mt-3 text-center text-[13px] text-brand-green-dark font-semibold">
+          <div className={`mt-3 text-center text-[13px] font-semibold ${ta.textDark}`}>
             Saques seguidos: {streak} / 3
             {streak >= 3 && <span className="ml-1 text-red-500">· al próximo punto rota</span>}
           </div>
@@ -1405,8 +1477,8 @@ function RotationTab({ match, flash, onRotate, onEditLineup, onCellClick }) {
         <button onClick={onRotate} className="p-4 bg-white border border-red-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-red-500 hover:bg-red-50 active:bg-red-100 transition">
           <RotateCw size={18} className="text-red-500" /> Rotar
         </button>
-        <button onClick={onEditLineup} className="p-4 bg-white border border-slate-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-slate-700 active:bg-slate-100 transition">
-          <Users size={18} className="text-brand-green-dark" /> Plantilla
+        <button onClick={onEditLineup} className={`p-4 bg-white border border-slate-200 rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-card text-slate-700 active:bg-slate-100 transition`}>
+          <Users size={18} className={ta.textDark} /> Plantilla
         </button>
       </div>
       <p className="text-xs text-slate-500 text-center px-4 leading-relaxed">
@@ -1416,13 +1488,14 @@ function RotationTab({ match, flash, onRotate, onEditLineup, onCellClick }) {
   );
 }
 
-function CourtCell({ player, index, isServer = false, onClick }) {
+function CourtCell({ player, index, isServer = false, onClick, color = 'green' }) {
   const label = POSITION_LABELS[index];
   const clickable = typeof onClick === 'function';
-  const baseClass = `aspect-square rounded-2xl flex flex-col items-center justify-center px-1.5 py-2 shadow-card transition ${isServer ? 'bg-gradient-to-br from-brand-green to-brand-green-dark text-white' : 'bg-white border border-slate-200'} ${clickable ? 'cursor-pointer active:scale-95 active:shadow-card-md' : ''}`;
+  const t = colorTokens(color);
+  const baseClass = `aspect-square rounded-2xl flex flex-col items-center justify-center px-1.5 py-2 shadow-card transition ${isServer ? `${t.gradient} text-white` : 'bg-white border border-slate-200'} ${clickable ? 'cursor-pointer active:scale-95 active:shadow-card-md' : ''}`;
   const inner = (
     <>
-      <div className={`text-[15px] font-mono font-bold leading-none ${isServer ? 'text-white/85' : 'text-brand-green'}`}>
+      <div className={`text-[15px] font-mono font-bold leading-none ${isServer ? 'text-white/85' : t.text}`}>
         {POSITION_SHORT[index]}{isServer && ' 🏐'}
       </div>
       {/* Nombre: wrap natural, break-words por si algún nombre carece de espacios.
@@ -1432,11 +1505,11 @@ function CourtCell({ player, index, isServer = false, onClick }) {
         {player?.name || '—'}
       </div>
       {player?.number != null && (
-        <div className={`font-mono text-[13px] leading-none mt-1 ${isServer ? 'text-white/80' : 'text-brand-green'}`}>
+        <div className={`font-mono text-[13px] leading-none mt-1 ${isServer ? 'text-white/80' : t.text}`}>
           #{player.number}
         </div>
       )}
-      <div className={`text-[13px] font-medium leading-none mt-1 ${isServer ? 'text-white/80' : 'text-brand-green/70'}`}>
+      <div className={`text-[13px] font-medium leading-none mt-1 ${isServer ? 'text-white/80' : `${t.text} opacity-70`}`}>
         {label}
       </div>
     </>
