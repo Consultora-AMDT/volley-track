@@ -31,3 +31,23 @@ export function forgetVisited(matchId) {
     localStorage.setItem(KEY, JSON.stringify(list.filter((x) => x !== matchId)));
   } catch {}
 }
+
+// Memoria de la versión de la app que el usuario tenía la última vez que
+// abrió la PWA en este dispositivo. Se usa para detectar saltos de versión
+// (es decir, "la app se acaba de actualizar") y mostrar un aviso en
+// la primera apertura tras un update.
+const VERSION_KEY = 'volley:last_seen_version';
+
+export function getLastSeenVersion() {
+  try {
+    return localStorage.getItem(VERSION_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setLastSeenVersion(version) {
+  try {
+    localStorage.setItem(VERSION_KEY, String(version));
+  } catch {}
+}

@@ -11,8 +11,8 @@ import {
   rotatePositions, updateLineup, updateRoster, finishMatch, reopenMatch, deleteMatch,
   subscribeToMatch,
 } from './api.js';
-import { trackVisited, getVisitedIds, forgetVisited } from './storage.js';
-import { LIMITS, SANTA_ANA_ROSTER } from './config.js';
+import { trackVisited, getVisitedIds, forgetVisited, getLastSeenVersion, setLastSeenVersion } from './storage.js';
+import { LIMITS, SANTA_ANA_ROSTER, APP_VERSION } from './config.js';
 import { FeedbackButton } from './FeedbackButton.jsx';
 import { ShareButton } from './ShareButton.jsx';
 import { VersionFooter } from './VersionFooter.jsx';
@@ -123,6 +123,33 @@ export default function App() {
   const [userId, setUserId] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  // Si la versión guardada en localStorage es distinta a APP_VERSION, este
+  // state contiene la versión anterior (string). Mostramos un modal de
+  // bienvenida "App actualizada" hasta que el usuario lo cierra con OK.
+  // null = no hay actualización pendiente que notificar.
+  const [updatedFromVersion, setUpdatedFromVersion] = useState(null);
+
+  // Detección de actualización: compara la versión guardada con la actual.
+  // - Primera ejecución (nada guardado): solo guarda APP_VERSION, sin modal.
+  // - Versión guardada == APP_VERSION: nada que hacer.
+  // - Versión guardada != APP_VERSION: muestra el modal y actualiza la
+  //   versión guardada cuando el usuario pulsa OK.
+  // Se hace en useEffect (no a nivel módulo) para que React tenga el state
+  // listo cuando llegamos a este punto.
+  useEffect(() => {
+    const last = getLastSeenVersion();
+    if (last && last !== APP_VERSION) {
+      setUpdatedFromVersion(last);
+    } else if (!last) {
+      // Primera ejecución: registramos la versión actual sin avisar.
+      setLastSeenVersion(APP_VERSION);
+    }
+  }, []);
+
+  const dismissUpdateModal = () => {
+    setLastSeenVersion(APP_VERSION);
+    setUpdatedFromVersion(null);
+  };
 
   useEffect(() => {
     // Helper: scroll a top, robusto frente a las distintas APIs del browser.
@@ -182,6 +209,42 @@ export default function App() {
         {route.view === 'setup' && <SetupView userId={userId} />}
         {route.view === 'match' && <MatchView matchId={route.id} userId={userId} />}
         {route.view === 'history' && <HistoryView userId={userId} />}
+      </div>
+      {updatedFromVersion && (
+        <UpdateModal fromVersion={updatedFromVersion} toVersion={APP_VERSION} onClose={dismissUpdateModal} />
+      )}
+    </div>
+  );
+}
+
+// Modal de bienvenida tras actualizar la app. Aparece la primera vez que
+// el usuario abre la PWA después de un upgrade del service worker. Se
+// cierra solo con el botón OK (no se cierra tocando fuera) para garantizar
+// que el usuario lo vea — algunos avisos son importantes (cambios de
+// regla, fixes que requieren su atención) y no queremos que se pase
+// de largo accidentalmente.
+function UpdateModal({ fromVersion, toVersion, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in">
+      <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-card-lg animate-in-pop text-center">
+        <div className="w-14 h-14 rounded-full bg-brand-green-soft flex items-center justify-center mx-auto mb-3">
+          <CheckCircle2 size={32} className="text-brand-green" />
+        </div>
+        <h3 className="text-xl font-bold text-slate-900 mb-1">¡App actualizada!</h3>
+        <p className="text-[14px] text-slate-600 mb-4">
+          Ya tienes la última versión con las mejoras y correcciones.
+        </p>
+        <div className="mb-5 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-2 text-sm font-mono">
+          <span className="text-slate-400">v{fromVersion}</span>
+          <span className="text-slate-300">→</span>
+          <span className="text-brand-green font-bold">v{toVersion}</span>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-full p-3.5 bg-gradient-to-br from-brand-green to-brand-green-dark text-white rounded-2xl font-bold text-base shadow-card active:scale-[0.98] transition"
+        >
+          OK
+        </button>
       </div>
     </div>
   );
