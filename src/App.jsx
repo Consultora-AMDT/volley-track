@@ -1505,7 +1505,8 @@ function MatchView({ matchId }) {
         <WinnerCelebrationModal
           teamName={winnerCelebration.team === 'A' ? match.teamA : match.teamB}
           isLocal={winnerCelebration.team === 'A'}
-          format={match.format}
+          playedSets={setsA + setsB}
+          maxSets={match.format === 'bo5' ? 5 : 3}
           onClose={() => setWinnerCelebration(null)}
         />
       )}
@@ -1516,27 +1517,33 @@ function MatchView({ matchId }) {
 function TeamHeader({ name, sets, serving, color, maxNameLength }) {
   const t = colorTokens(color);
   // El numero grande de sets y la etiqueta "SETS" van en la MISMA linea
-  // (flex con baseline), ahorrando una linea vertical de espacio. Ese
-  // espacio liberado se aprovecha para subir un escalon todos los tamanos
-  // del nombre del equipo:
+  // (flex con baseline). Tamano del nombre adaptativo segun la longitud
+  // del nombre mas largo de los dos equipos:
   //   <=14 chars  →  18px (text-lg)
   //   <=22 chars  →  16px (text-base)
   //   >22 chars   →  14px (text-sm)
-  // items-stretch en el contenedor padre se encarga de igualar la altura
-  // de ambas cards aunque uno de los equipos tenga el nombre mas largo.
+  //
+  // IMPORTANTE — alineacion entre ambas cards:
+  // La card usa justify-between (no justify-center). El nombre va en un
+  // wrapper flex-1 con items-center, asi se centra verticalmente DENTRO
+  // del espacio sobrante. El bloque del numero+SETS va en una posicion
+  // FIJA al fondo de la card.
+  //
+  // Esto garantiza que el numero siempre quede a la misma altura entre
+  // las dos cards aunque tengan nombres de longitudes muy distintas.
+  // Con justify-center los nombres cortos/largos centraban su contenido
+  // y los numeros bailaban. Con esta estructura, items-stretch del padre
+  // iguala el alto total de las cards y los numeros quedan anclados a
+  // la misma linea.
   //
   // El indicador de saque (🏐) va como BADGE ABSOLUTO en la esquina
-  // superior izquierda de la card, NO inline antes del nombre. Si fuera
-  // inline rompería la alineación entre las dos cards: el equipo que saca
-  // tendría más ancho de contenido y su número de sets quedaría a distinta
-  // altura que el del otro equipo. Como badge absoluto el emoji no afecta
-  // al layout del texto y los dos números siempre quedan a la misma altura.
+  // superior izquierda. No participa en el flow del texto.
   const len = maxNameLength ?? name.length;
   const nameSize = len > 22 ? 'text-sm'
                  : len > 14 ? 'text-base'
                  : 'text-lg';
   return (
-    <div className={`relative flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0 flex flex-col items-center justify-center text-center`}>
+    <div className={`relative flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0 flex flex-col items-center text-center justify-between gap-2`}>
       {serving && (
         <span
           className="absolute top-1.5 left-1.5 text-sm leading-none select-none"
@@ -1546,10 +1553,12 @@ function TeamHeader({ name, sets, serving, color, maxNameLength }) {
           🏐
         </span>
       )}
-      <div className={`font-semibold text-slate-900 leading-tight break-words ${nameSize}`}>
-        {name}
+      <div className="flex-1 flex items-center justify-center w-full">
+        <div className={`font-semibold text-slate-900 leading-tight break-words ${nameSize}`}>
+          {name}
+        </div>
       </div>
-      <div className="flex items-baseline gap-1.5 mt-1.5">
+      <div className="flex items-baseline gap-1.5">
         <span className={`text-3xl font-bold tabular-nums leading-none ${t.text}`}>{sets}</span>
         <span className="text-[13px] text-slate-500 uppercase tracking-wide font-semibold leading-none">sets</span>
       </div>
@@ -1873,7 +1882,19 @@ function ConfirmModal({ title, message, confirmText, cancelText = 'Cancelar', va
 // Modal grande de celebración que aparece la primera vez que un equipo
 // alcanza los sets necesarios. Confetti CSS puro (sin librerías) cayendo
 // sobre un card con trofeo animado y el nombre del equipo ganador.
-function WinnerCelebrationModal({ teamName, isLocal, format, onClose }) {
+function WinnerCelebrationModal({ teamName, isLocal, playedSets, maxSets, onClose }) {
+  // Diferenciamos dos situaciones:
+  //
+  // A) El partido se gana ANTICIPADAMENTE (ej. 2-0 en BO3, 3-0 o 3-1 en
+  //    BO5): aun quedan sets por jugar que NO afectan al resultado.
+  //    Mensaje informativo: "los siguientes son amistosos".
+  //
+  // B) El partido se gana en el ULTIMO SET posible (ej. 2-1 en BO3, 3-2
+  //    en BO5): no quedan mas sets. Mensaje: "el partido ha terminado".
+  //
+  // El criterio es comparar sets jugados con el maximo del formato.
+  const hasMoreSets = playedSets < maxSets;
+
   // Generamos 60 piezas de confetti con propiedades aleatorias estables
   // por instancia del componente (useMemo).
   const confettiPieces = React.useMemo(() => {
@@ -1937,15 +1958,24 @@ function WinnerCelebrationModal({ teamName, isLocal, format, onClose }) {
         </div>
 
         <div className="mt-5 p-3 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl text-[13px] text-amber-900 leading-snug">
-          <strong>El partido ya está decidido.</strong>{' '}
-          Si jugáis el resto de sets, no afectan al resultado final.
+          {hasMoreSets ? (
+            <>
+              <strong>El partido ya está decidido.</strong>{' '}
+              Si jugáis el resto de sets, no afectan al resultado final.
+            </>
+          ) : (
+            <>
+              <strong>El partido ha terminado.</strong>{' '}
+              Se han jugado todos los sets.
+            </>
+          )}
         </div>
 
         <button
           onClick={onClose}
           className="mt-5 w-full p-3.5 bg-gradient-to-br from-brand-green to-brand-green-dark text-white rounded-2xl font-bold text-base shadow-card active:scale-[0.98] transition"
         >
-          ¡Continuar! 🏐
+          {hasMoreSets ? '¡Continuar! 🏐' : '¡Ver resumen!'}
         </button>
       </div>
     </div>
