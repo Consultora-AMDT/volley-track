@@ -557,15 +557,22 @@ function MatchCard({ match, userId, onClick, onDelete }) {
   const sets = uniqueSetsByNumber(match.sets);
   const setsA = sets.filter((s) => s.a > s.b).length;
   const setsB = sets.filter((s) => s.b > s.a).length;
-  const wonA = match.winner === 'A';
-  const wonB = match.winner === 'B';
-  // Victoria del Santa Ana (cole). Si hay ganador y su nombre encaja con
-  // el cole, marcamos la tarjeta con borde dorado y copa.
+  // Derivamos el ganador del marcador si match.winner está en null. Caso
+  // típico: partido finalizado manualmente sin haber alcanzado sets_needed.
+  // Solo consideramos derivedWinner cuando el partido ya está finalizado
+  // (para EN VIVO no marcamos un ganador hasta que la BD lo confirme).
+  let derivedWinner = match.winner;
+  if (!derivedWinner && match.finished) {
+    if (setsA > setsB) derivedWinner = 'A';
+    else if (setsB > setsA) derivedWinner = 'B';
+  }
+  const wonA = derivedWinner === 'A';
+  const wonB = derivedWinner === 'B';
+  // Victoria del Santa Ana (cole).
   const santaAnaWon =
     (wonA && isSantaAnaName(match.teamA)) ||
     (wonB && isSantaAnaName(match.teamB));
-  // Colores base de cada equipo (verde = cole, azul = rival). Si ninguno
-  // es el cole se usa el esquema verde claro/oscuro.
+  // Colores base de cada equipo (verde = cole, azul = rival).
   const [colorA, colorB] = teamColorPair(match.teamA, match.teamB);
   const ta = colorTokens(colorA);
   const tb = colorTokens(colorB);
@@ -1585,18 +1592,40 @@ function FinishedSummary({ match, onReopen }) {
   const sets = uniqueSetsByNumber(match.sets);
   const setsA = sets.filter((s) => s.a > s.b).length;
   const setsB = sets.filter((s) => s.b > s.a).length;
-  const winnerName = match.winner === 'A' ? match.teamA : match.teamB;
+  // Si el partido tiene `winner` registrado en BD (alcanzó sets_needed
+  // antes de finalizar), lo usamos. Si no — caso típico: el usuario pulsó
+  // "Finalizar partido" manualmente sin completar la regla de sets — lo
+  // derivamos del marcador. Si está empatado, no hay ganador y mostramos
+  // un resumen neutro sin trofeo.
+  let derivedWinner = match.winner;
+  if (!derivedWinner) {
+    if (setsA > setsB) derivedWinner = 'A';
+    else if (setsB > setsA) derivedWinner = 'B';
+    else derivedWinner = null; // empate sin desempate
+  }
+  const isDraw = derivedWinner === null;
+  const winnerName = derivedWinner === 'A' ? match.teamA : derivedWinner === 'B' ? match.teamB : null;
   // Color del ganador según el esquema (Santa Ana = verde, rival = azul).
   const [colorA, colorB] = teamColorPair(match.teamA, match.teamB);
-  const winnerColor = match.winner === 'A' ? colorA : colorB;
+  const winnerColor = derivedWinner === 'A' ? colorA : derivedWinner === 'B' ? colorB : 'green';
   const wt = colorTokens(winnerColor);
   const duration = match.endedAt ? formatDuration(match.endedAt - match.startedAt) : null;
   return (
     <div className={`px-5 py-8 ${wt.gradientSoft}`}>
       <div className="text-center py-4">
-        <Trophy size={48} className={`mx-auto mb-3 ${wt.text}`} />
-        <div className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1">Ganador</div>
-        <h2 className={`text-2xl font-bold mb-2 ${wt.text}`}>{winnerName}</h2>
+        {isDraw ? (
+          <>
+            <div className="text-5xl mb-3" aria-hidden="true">🤝</div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1">Partido finalizado</div>
+            <h2 className="text-2xl font-bold mb-2 text-slate-700">Sin ganador</h2>
+          </>
+        ) : (
+          <>
+            <Trophy size={48} className={`mx-auto mb-3 ${wt.text}`} />
+            <div className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1">Ganador</div>
+            <h2 className={`text-2xl font-bold mb-2 ${wt.text}`}>{winnerName}</h2>
+          </>
+        )}
         <div className="text-3xl font-bold text-slate-900 tabular-nums">{setsA}–{setsB}</div>
         <div className="text-xs text-slate-500 mt-3 flex items-center justify-center gap-2 flex-wrap">
           <span>{new Date(match.startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
