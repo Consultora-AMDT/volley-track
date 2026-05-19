@@ -1523,38 +1523,45 @@ function TeamHeader({ name, sets, serving, color, maxNameLength }) {
   //   <=22 chars  →  16px (text-base)
   //   >22 chars   →  14px (text-sm)
   //
-  // IMPORTANTE — alineacion entre ambas cards:
-  // La card usa justify-between (no justify-center). El nombre va en un
-  // wrapper flex-1 con items-center, asi se centra verticalmente DENTRO
-  // del espacio sobrante. El bloque del numero+SETS va en una posicion
-  // FIJA al fondo de la card.
+  // OVERFLOW: dos defensas combinadas para nombres patologicos.
+  //   1) overflow-wrap: anywhere en el div del nombre — permite que el
+  //      texto rompa en cualquier punto cuando no hay espacios. Esto es
+  //      clave para nombres largos sin espacios (ej. "Kdkdkkdkdkdkd"),
+  //      donde break-words/overflow-wrap:break-word NO rompe y deja el
+  //      texto desbordando fuera de la card.
+  //   2) overflow-hidden en el contenedor de la card — defensa de
+  //      ultimo recurso para que si algo se sale, no se vea fuera del
+  //      cuadro.
   //
-  // Esto garantiza que el numero siempre quede a la misma altura entre
-  // las dos cards aunque tengan nombres de longitudes muy distintas.
-  // Con justify-center los nombres cortos/largos centraban su contenido
-  // y los numeros bailaban. Con esta estructura, items-stretch del padre
-  // iguala el alto total de las cards y los numeros quedan anclados a
-  // la misma linea.
+  // ALINEACION ENTRE CARDS: justify-between (no justify-center). El
+  // nombre va en un wrapper flex-1 con items-center, asi se centra
+  // verticalmente DENTRO del espacio sobrante. El bloque del numero+SETS
+  // va en una posicion FIJA al fondo de la card. Como items-stretch del
+  // contenedor padre iguala el alto de ambas cards, los numeros quedan
+  // siempre a la misma altura.
   //
-  // El indicador de saque (🏐) va como BADGE ABSOLUTO en la esquina
-  // superior izquierda. No participa en el flow del texto.
+  // SAQUE: el 🏐 va como BADGE ABSOLUTO en la esquina superior izquierda.
+  // No participa en el flow del texto.
   const len = maxNameLength ?? name.length;
   const nameSize = len > 22 ? 'text-sm'
                  : len > 14 ? 'text-base'
                  : 'text-lg';
   return (
-    <div className={`relative flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0 flex flex-col items-center text-center justify-between gap-2`}>
+    <div className={`relative flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0 overflow-hidden flex flex-col items-center text-center justify-between gap-2`}>
       {serving && (
         <span
-          className="absolute top-1.5 left-1.5 text-sm leading-none select-none"
+          className="absolute top-1.5 left-1.5 text-sm leading-none select-none z-10"
           aria-label="Saca este equipo"
           role="img"
         >
           🏐
         </span>
       )}
-      <div className="flex-1 flex items-center justify-center w-full">
-        <div className={`font-semibold text-slate-900 leading-tight break-words ${nameSize}`}>
+      <div className="flex-1 flex items-center justify-center w-full min-w-0">
+        <div
+          className={`font-semibold text-slate-900 leading-tight ${nameSize} w-full`}
+          style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+        >
           {name}
         </div>
       </div>
@@ -1730,7 +1737,10 @@ function ScoreButton({ name, score, onAdd, onSubtract, color, maxNameLength }) {
         onClick={onAdd}
         className={`aspect-[3/4] bg-gradient-to-br from-white to-slate-50 border border-slate-200 border-b-0 p-3 flex flex-col justify-between ${t.activeFrom} ${t.activeTo} active:text-white transition`}
       >
-        <div className={`text-slate-500 uppercase tracking-wider font-bold leading-tight break-words line-clamp-2 text-center ${nameSize}`}>{name}</div>
+        <div
+          className={`text-slate-500 uppercase tracking-wider font-bold leading-tight line-clamp-2 text-center ${nameSize} w-full`}
+          style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+        >{name}</div>
         <ScoreNumber score={score} accent={t.text} />
         <div className={`flex items-center justify-center gap-1 ${t.text} font-bold`}>
           <Plus size={18} /> <span className="text-sm">PUNTO</span>
