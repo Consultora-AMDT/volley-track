@@ -38,6 +38,13 @@ BEGIN
 END $$;
 
 -- ============ FUNCIÓN subtract_point con dedupe ============
+-- IMPORTANTE: la función original devolvía `matches` (la row) y la
+-- nueva devuelve `JSONB`. PostgreSQL no permite cambiar el tipo de
+-- retorno con CREATE OR REPLACE, así que hay que DROP primero. El
+-- DROP IF EXISTS hace que sea seguro ejecutar la migración varias
+-- veces.
+DROP FUNCTION IF EXISTS public.subtract_point(UUID, TEXT);
+
 -- Devuelve un JSONB con la misma forma que add_point:
 --   { "match": <row>, "deduped": false }      -- resta aplicada
 --   { "match": <row>, "deduped": true,        -- resta ignorada (duplicada)
