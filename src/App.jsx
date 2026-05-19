@@ -661,9 +661,35 @@ function MatchView({ matchId }) {
   const [confirmReopen, setConfirmReopen] = useState(false);
   const inflight = useRef(false);
   const prevPositionsRef = useRef(null);
+  const prevWinnerRef = useRef(); // sentinel: undefined = aún sin inicializar
   const initializedRef = useRef(false);
 
   useEffect(() => { trackVisited(matchId); }, [matchId]);
+
+  // Detectar cuando se proclama un ganador (winner pasa de null a 'A'/'B')
+  // para mostrar un toast grande de celebración. El partido NO se cierra;
+  // sigue activo para que en el cole jueguen el set extra "de entrenamiento".
+  useEffect(() => {
+    if (!match) return;
+    const curr = match.winner || null;
+    // En el primer render con match cargado, solo memorizamos el estado
+    // inicial sin disparar el toast (puede que el match ya viniera con
+    // ganador desde antes de abrir la app).
+    if (prevWinnerRef.current === undefined) {
+      prevWinnerRef.current = curr;
+      return;
+    }
+    const prev = prevWinnerRef.current;
+    if (prev === null && curr) {
+      const teamName = curr === 'A' ? match.teamA : match.teamB;
+      setToast({
+        message: `🏆 ¡${teamName} gana el partido! Sigue jugando como entrenamiento.`,
+        kind: 'success',
+        key: Date.now(),
+      });
+    }
+    prevWinnerRef.current = curr;
+  }, [match?.winner, match?.teamA, match?.teamB]);
 
   // Detectar cambios en posiciones (rotación o edición de plantilla)
   useEffect(() => {
@@ -826,6 +852,19 @@ function MatchView({ matchId }) {
           <div className="flex items-center text-slate-300 text-base font-bold">VS</div>
           <TeamHeader name={match.teamB} sets={setsB} serving={match.server === 'B' && !match.finished} color="green-dark" />
         </div>
+
+        {/* Banner: equipo ha ganado el partido pero seguimos jugando "como
+            entrenamiento". Aparece cuando winner está seteado pero el partido
+            no se ha finalizado manualmente (finished=false). */}
+        {match.winner && !match.finished && (
+          <div className="mt-3 px-3 py-2 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-300 rounded-xl flex items-center gap-2 text-amber-900">
+            <Trophy size={18} className="text-amber-600 flex-shrink-0" />
+            <div className="text-[13px] leading-tight">
+              <span className="font-bold">{match.winner === 'A' ? match.teamA : match.teamB}</span> gana el partido.
+              <span className="text-amber-700"> Seguid jugando como entrenamiento — pulsad "Finalizar" cuando queráis cerrar.</span>
+            </div>
+          </div>
+        )}
 
         <MatchTimes match={match} />
       </div>
