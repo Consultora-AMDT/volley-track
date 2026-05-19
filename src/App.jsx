@@ -18,7 +18,7 @@ import { ShareButton } from './ShareButton.jsx';
 import { VersionFooter } from './VersionFooter.jsx';
 
 // Etiquetas de las 4 posiciones (P1=índice 0, P2=índice 1, etc.)
-const POSITION_LABELS = ['Saque', 'Izquierda', 'Colocador', 'Derecha'];
+const POSITION_LABELS = ['Saque', 'Izquierda', 'Colocador/a', 'Derecha'];
 const POSITION_SHORT = ['P1', 'P2', 'P3', 'P4'];
 
 // ============ ROUTER (hash) ============
@@ -285,8 +285,8 @@ function HomeView({ userId }) {
           title="¿Eliminar este partido?"
           message={
             confirmDelete.match.createdBy === userId
-              ? 'Tú creaste este partido. Se borrará del servidor y desaparecerá también para el resto de padres que tengan el enlace. No se puede deshacer.'
-              : 'Lo quitará solo de tu lista. El partido seguirá existiendo para los demás padres que lo creó.'
+              ? 'Tú creaste este partido. Se borrará del servidor y desaparecerá también para el resto de padres/madres que tengan el enlace. No se puede deshacer.'
+              : 'Lo quitará solo de tu lista. El partido seguirá existiendo para los/las demás y para quien lo creó.'
           }
           confirmText="Sí, eliminar"
           variant="danger"
@@ -649,20 +649,23 @@ function SetupView({ userId }) {
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-500 mt-2">P1 saca primero. Editable después por cualquier padre.</p>
+        <p className="text-xs text-slate-500 mt-2">P1 saca primero. Editable después por cualquier padre/madre.</p>
       </Field>
 
       <Field label={`Suplentes${bench.length > 0 ? ` (${bench.length})` : ''}`}>
         <div className="space-y-2">
           {bench.map((p, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold flex-shrink-0">S{i + 1}</div>
+            // Grid con anchos fijos en las columnas exteriores para que el
+            // badge S# y la X de quitar queden siempre alineados aunque
+            // los nombres tengan longitudes muy distintas (Inés vs Guillermo).
+            <div key={i} className="grid grid-cols-[56px_1fr_40px] gap-2 items-center">
+              <div className="h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold">S{i + 1}</div>
               {rosterLoaded ? (
                 <button
                   onClick={() => setPicker({ scope: 'bench', idx: i })}
-                  className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-left flex items-center justify-between shadow-card"
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-left flex items-center justify-between shadow-card min-w-0"
                 >
-                  <span className={p.name ? 'text-slate-900 font-medium truncate' : 'text-slate-400'}>
+                  <span className={`min-w-0 truncate ${p.name ? 'text-slate-900 font-medium' : 'text-slate-400'}`}>
                     {p.name ? (
                       <>
                         {p.name}
@@ -682,10 +685,10 @@ function SetupView({ userId }) {
                   }}
                   maxLength={LIMITS.playerNameMax}
                   placeholder="Nombre"
-                  className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition"
+                  className="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition min-w-0"
                 />
               )}
-              <button onClick={() => setBench(bench.filter((_, idx) => idx !== i))} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition flex items-center justify-center flex-shrink-0" aria-label="Quitar suplente">
+              <button onClick={() => setBench(bench.filter((_, idx) => idx !== i))} className="h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition flex items-center justify-center" aria-label="Quitar suplente">
                 <X size={16} />
               </button>
             </div>
@@ -705,7 +708,7 @@ function SetupView({ userId }) {
       <button disabled={!canStart} onClick={handleStart} className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-green-dark text-white disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500 rounded-2xl font-semibold flex items-center justify-center gap-2 transition mt-4 shadow-card-md">
         <Play size={20} /> {creating ? 'Creando…' : 'Empezar partido'}
       </button>
-      <p className="text-xs text-slate-500 text-center mt-3">Recibirás un enlace para compartir con el grupo de padres.</p>
+      <p className="text-xs text-slate-500 text-center mt-3">Recibirás un enlace para compartir con el grupo de padres y madres.</p>
 
       {picker && (
         <RosterPickerModal
@@ -798,7 +801,7 @@ function ShareAfterCreateModal({ match, onContinue }) {
           </div>
           <h3 className="text-xl font-bold text-slate-900">¡Partido creado!</h3>
           <p className="text-[14px] text-slate-500 mt-1 px-2">
-            Compártelo con el grupo de padres para que puedan seguirlo en vivo.
+            Compártelo con el grupo de padres y madres para que puedan seguirlo en vivo.
           </p>
         </div>
 
@@ -847,7 +850,7 @@ function ShareAfterCreateModal({ match, onContinue }) {
         )}
 
         <p className="text-[12px] text-slate-400 text-center mb-3 mt-1">
-          Cualquier padre con el enlace podrá ver y editar el partido.
+          Cualquier padre/madre con el enlace podrá ver y editar el partido.
         </p>
 
         {/* Continuar al match */}
@@ -1031,7 +1034,7 @@ function MatchView({ matchId }) {
     try {
       const res = await apiAddPoint(matchId, team);
       if (res.deduped) {
-        showToast(`Punto ya sumado hace ${res.secondsAgo ?? 0}s por otro padre`, 'warn');
+        showToast(`Punto ya sumado hace ${res.secondsAgo ?? 0}s por otro padre/madre`, 'warn');
       } else {
         setMatch(res.match);
         if (res.match.finished) showToast('¡Partido finalizado y guardado!', 'success');
@@ -1301,7 +1304,7 @@ function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
             <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} onSubtract={() => onSubtract('B')} color={colorB} />
           </div>
           <p className="text-[16px] text-slate-500 text-center mb-4 px-4 leading-relaxed">
-            Si varios padres pulsan el mismo punto en menos de 10s, solo cuenta una vez.
+            Si varios padres/madres pulsan el mismo punto en menos de 10s, solo cuenta una vez.
           </p>
         </>
       )}
@@ -1482,7 +1485,7 @@ function RotationTab({ match, flash, onRotate, onEditLineup, onCellClick }) {
         </button>
       </div>
       <p className="text-xs text-slate-500 text-center px-4 leading-relaxed">
-        Rotación automática: al ganar el saque (side-out) y al 4º punto consecutivo sacando. Cualquier padre puede rotar manualmente, sustituir o añadir suplentes.
+        Rotación automática: al ganar el saque (side-out) y al 4º punto consecutivo sacando. Cualquier padre/madre puede rotar manualmente, sustituir o añadir suplentes.
       </p>
     </div>
   );
@@ -1910,8 +1913,8 @@ function RosterModal({ positions, bench, onSave, onClose }) {
             <h4 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2">Banquillo ({benchList.length})</h4>
             <div className="space-y-2 mb-2">
               {benchList.map((p, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="w-14 h-14 rounded-xl bg-slate-100 flex flex-col items-center justify-center text-slate-500 flex-shrink-0">
+                <div key={i} className="grid grid-cols-[56px_1fr_40px] gap-2 items-center">
+                  <div className="h-14 rounded-xl bg-slate-100 flex flex-col items-center justify-center text-slate-500">
                     <div className="text-xs font-bold leading-none">S{i + 1}</div>
                     {p.number != null && <div className="text-[10px] font-mono text-brand-green-dark mt-0.5">#{p.number}</div>}
                   </div>
@@ -1920,9 +1923,9 @@ function RosterModal({ positions, bench, onSave, onClose }) {
                     onChange={(e) => updateBenchName(i, e.target.value)}
                     maxLength={LIMITS.playerNameMax}
                     placeholder="Nombre"
-                    className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-green"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand-green min-w-0"
                   />
-                  <button onClick={() => removeBench(i)} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition flex items-center justify-center flex-shrink-0" aria-label="Quitar">
+                  <button onClick={() => removeBench(i)} className="h-10 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition flex items-center justify-center" aria-label="Quitar">
                     <X size={16} />
                   </button>
                 </div>
@@ -2050,8 +2053,8 @@ function HistoryView({ userId }) {
           title="¿Eliminar este partido?"
           message={
             confirmDelete.match.createdBy === userId
-              ? 'Tú creaste este partido. Se borrará del servidor y desaparecerá también para el resto de padres que tengan el enlace. No se puede deshacer.'
-              : 'Lo quitará solo de tu lista. El partido seguirá existiendo para los demás padres y para quien lo creó.'
+              ? 'Tú creaste este partido. Se borrará del servidor y desaparecerá también para el resto de padres/madres que tengan el enlace. No se puede deshacer.'
+              : 'Lo quitará solo de tu lista. El partido seguirá existiendo para los/las demás y para quien lo creó.'
           }
           confirmText="Sí, eliminar"
           variant="danger"
