@@ -371,20 +371,18 @@ function SetupView({ userId }) {
     return SANTA_ANA_ROSTER.filter((p) => !usedNames.has(p.name.toLowerCase()));
   };
 
-  // Para elegir una titular: excluye solo a las que ya ocupan OTROS slots
-  // de titular (porque no se pueden duplicar en el campo). Incluye a las del
-  // banquillo (para hacer swap: ella sube, la actual baja) y a las sin
-  // asignar. Cada opción lleva un marcador _source que el modal usa para
-  // mostrar visualmente de dónde viene la jugadora.
+  // Para elegir una titular: excluye a las que ya ocupan OTROS slots de
+  // titular (no se pueden duplicar en el campo) Y a la que está actualmente
+  // en este slot (sería un no-op). Incluye a las del banquillo (para hacer
+  // swap: ella sube, la actual baja) y a las sin asignar. Cada opción lleva
+  // un marcador _source que el modal usa para mostrar de dónde viene.
   const availableForStarter = (currentIdx) => {
-    const inOtherStarters = new Set();
+    const excluded = new Set();
     starters.forEach((p, i) => {
-      if (i !== currentIdx && p?.name?.trim()) {
-        inOtherStarters.add(p.name.trim().toLowerCase());
-      }
+      if (p?.name?.trim()) excluded.add(p.name.trim().toLowerCase());
     });
     return SANTA_ANA_ROSTER
-      .filter((p) => !inOtherStarters.has(p.name.toLowerCase()))
+      .filter((p) => !excluded.has(p.name.toLowerCase()))
       .map((p) => {
         const inBench = bench.some(
           (b) => b?.name && b.name.toLowerCase() === p.name.toLowerCase()
@@ -1392,16 +1390,15 @@ function RosterModal({ positions, bench, onSave, onClose }) {
   };
 
   // Para elegir titular: incluye también a las del banquillo (swap directo).
-  // Excluye solo a las que ya están en OTROS slots de titular.
+  // Excluye a TODAS las que están en titulares (incluida la del slot actual,
+  // para evitar duplicarla en el banquillo si se re-elige).
   const availableForStarter = (currentIdx) => {
-    const inOtherStarters = new Set();
-    court.forEach((p, i) => {
-      if (i !== currentIdx && p?.name?.trim()) {
-        inOtherStarters.add(p.name.trim().toLowerCase());
-      }
+    const excluded = new Set();
+    court.forEach((p) => {
+      if (p?.name?.trim()) excluded.add(p.name.trim().toLowerCase());
     });
     return SANTA_ANA_ROSTER
-      .filter((p) => !inOtherStarters.has(p.name.toLowerCase()))
+      .filter((p) => !excluded.has(p.name.toLowerCase()))
       .map((p) => {
         const inBench = benchList.some(
           (b) => b?.name && b.name.toLowerCase() === p.name.toLowerCase()
