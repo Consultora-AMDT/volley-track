@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import {
   Trophy, Users, RotateCw, Plus, Minus, ChevronLeft, Home, History, Play,
   Wifi, WifiOff, AlertTriangle, Edit3, Check, X, CheckCircle2, Clock, Trash2,
@@ -1022,13 +1022,13 @@ function MatchView({ matchId }) {
 
   useEffect(() => { trackVisited(matchId); }, [matchId]);
 
-  // Forzar el scroll al top al abrir el partido o cambiar de tab. Se usa un
-  // triple fallback para cubrir todos los casos de navegación móvil:
-  //   1. scrollTo síncrono inmediato.
-  //   2. requestAnimationFrame anidado (espera al primer paint).
-  //   3. setTimeout 50ms (red de seguridad para PWAs que ignoran lo anterior).
-  // También desactivamos la restauración automática del scroll del browser.
-  useEffect(() => {
+  // Forzar el scroll al top al abrir el partido o cambiar de tab. Usamos
+  // useLayoutEffect (no useEffect) para ejecutarse SÍNCRONAMENTE tras las
+  // mutaciones del DOM y ANTES del paint del navegador — es la diferencia
+  // crucial: con useEffect, el browser puede pintar el frame con el scroll
+  // a media altura antes de que el scrollTo entre en juego.
+  // Triple defensa adicional: scrollTo síncrono + doble RAF + setTimeout.
+  useLayoutEffect(() => {
     if (typeof window === 'undefined') return;
     if ('scrollRestoration' in window.history) {
       window.history.scrollRestoration = 'manual';
@@ -1271,19 +1271,22 @@ function MatchView({ matchId }) {
       {tab === 'score' && <ScoreTab match={match} onPoint={handleAddPoint} onSubtract={handleSubtract} onReopen={() => setConfirmReopen(true)} onEnd={handleEnd} />}
       {tab === 'rotation' && <RotationTab match={match} flash={rotationFlash} onRotate={handleRotate} onEditLineup={() => setEditingLineup(true)} onCellClick={(idx) => setQuickSubIdx(idx)} />}
 
-      {/* Botones de acción del partido, intercambiados respecto a versiones
-          previas: ahora Compartir va ARRIBA (donde antes estaba "Finalizar
-          manualmente") y Finalizar va ABAJO (donde antes estaba Compartir).
-          Ambos aparecen en cualquier tab. Finalizar solo cuando el match
-          sigue abierto. */}
-      <div className="px-5 mt-2"><ShareButton match={match} /></div>
-      {!match.finished && (
-        <div className="px-5 mt-2">
-          <button onClick={handleEnd} className="w-full p-3 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-sm font-medium shadow-card transition">
-            Finalizar partido manualmente
-          </button>
-        </div>
-      )}
+      {/* Botones de acción del partido. En partidos en curso ambos botones
+          comparten una fila (grid 2 columnas) para ahorrar espacio vertical.
+          Si el partido ya ha terminado, solo aparece Compartir (ancho
+          completo). */}
+      <div className="px-5 mt-2">
+        {match.finished ? (
+          <ShareButton match={match} />
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <ShareButton match={match} />
+            <button onClick={handleEnd} className="w-full p-4 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-2xl font-semibold text-sm shadow-card transition flex items-center justify-center">
+              Finalizar partido
+            </button>
+          </div>
+        )}
+      </div>
 
       {editingLineup && (
         <RosterModal
@@ -1359,8 +1362,8 @@ function TeamHeader({ name, sets, serving, color }) {
         {serving && <span className="text-base">🏐</span>}
         <span className="font-semibold text-slate-900 truncate text-sm">{name}</span>
       </div>
-      <div className={`text-3xl font-bold tabular-nums ${t.text}`}>{sets}</div>
-      <div className="text-[15px] text-slate-500 uppercase tracking-wide font-semibold">sets</div>
+      <div className={`text-3xl font-bold tabular-nums text-center ${t.text}`}>{sets}</div>
+      <div className="text-[15px] text-slate-500 uppercase tracking-wide font-semibold text-center">sets</div>
     </div>
   );
 }

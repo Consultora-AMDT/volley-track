@@ -17,6 +17,17 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   max-width: 100vw;
+  /* Desactiva el scroll-anchoring de Chrome. Cuando el layout cambia
+     bruscamente (ej: pantalla "Cargando..." → marcador del partido al
+     cargar async), Chrome trataba de mantener al usuario "en el mismo
+     sitio visual" y empujaba el scroll hacia abajo, dejando los
+     botones del marcador cortados por arriba. Esto es la causa raíz
+     real del bug del marcador cortado al entrar a un partido. */
+  overflow-anchor: none;
+}
+
+* {
+  overflow-anchor: none;
 }
 
 body {

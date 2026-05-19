@@ -39,9 +39,9 @@ export function ShareButton({ match }) {
     <>
       <button
         onClick={shareNative}
-        className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-blue text-white rounded-2xl font-semibold flex items-center justify-center gap-2 transition shadow-card-md"
+        className="w-full p-4 bg-gradient-to-r from-brand-green to-brand-blue text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition shadow-card-md"
       >
-        <Share2 size={18} /> Compartir partido
+        <Share2 size={18} /> Compartir
       </button>
 
       {open && (
