@@ -30,7 +30,22 @@ function parseHash() {
   if (h === '#/history') return { view: 'history' };
   return { view: 'home' };
 }
-const navigate = (h) => { window.location.hash = h; };
+// El parámetro opcional `replace` reemplaza la entrada actual del historial
+// en lugar de añadir una nueva. Útil cuando una pantalla es un paso
+// intermedio que no debe revisitarse con el botón atrás del móvil (caso
+// típico: el formulario de "Nuevo partido" tras crear el partido — no
+// tiene sentido que el atrás desde el marcador vuelva al formulario).
+// Usamos history.replaceState y disparamos hashchange manualmente porque
+// replaceState no lo lanza por sí mismo.
+const navigate = (h, opts = {}) => {
+  if (opts.replace) {
+    const url = window.location.pathname + window.location.search + h;
+    window.history.replaceState(null, '', url);
+    window.dispatchEvent(new Event('hashchange'));
+  } else {
+    window.location.hash = h;
+  }
+};
 
 // ============ HELPERS TIEMPO ============
 const formatHHMM = (ts) => new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -727,7 +742,9 @@ function SetupView({ userId }) {
         <ShareAfterCreateModal
           match={createdMatch}
           onContinue={() => {
-            navigate(`#/match/${createdMatch.id}`);
+            // replace: true para que el botón atrás del móvil desde el
+            // marcador vaya a Inicio en vez de volver al formulario.
+            navigate(`#/match/${createdMatch.id}`, { replace: true });
             setCreatedMatch(null);
           }}
         />
