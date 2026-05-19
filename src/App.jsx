@@ -297,29 +297,51 @@ function HomeView({ userId }) {
   );
 }
 
+// Detecta si el nombre de un equipo es el Santa Ana (acepta variantes
+// como "Santa Ana", "Santa Ana y San Rafael", "Colegio Santa Ana", etc.).
+function isSantaAnaName(name) {
+  if (!name) return false;
+  const n = name.toLowerCase();
+  return n.includes('santa ana') || n.includes('san rafael');
+}
+
 function MatchCard({ match, userId, onClick, onDelete }) {
   const sets = uniqueSetsByNumber(match.sets);
   const setsA = sets.filter((s) => s.a > s.b).length;
   const setsB = sets.filter((s) => s.b > s.a).length;
   const wonA = match.winner === 'A';
   const wonB = match.winner === 'B';
+  // Victoria del Santa Ana (cole). Si hay ganador y su nombre encaja con
+  // el cole, marcamos la tarjeta con borde dorado y copa.
+  const santaAnaWon =
+    (wonA && isSantaAnaName(match.teamA)) ||
+    (wonB && isSantaAnaName(match.teamB));
   return (
-    <div className="w-full bg-white rounded-2xl mb-2 border border-slate-200 shadow-card hover:shadow-card-md transition flex items-stretch">
+    <div className={`w-full rounded-2xl mb-2 shadow-card hover:shadow-card-md transition flex items-stretch ${santaAnaWon ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-300' : 'bg-white border border-slate-200'}`}>
       <button onClick={onClick} className="flex-1 text-left p-4 min-w-0">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className={`font-semibold truncate ${wonA ? 'text-brand-green' : 'text-slate-900'}`}>{match.teamA}</span>
-          <span className={`font-bold text-xl tabular-nums ml-2 flex-shrink-0 ${wonA ? 'text-brand-green' : 'text-slate-400'}`}>{setsA}</span>
+        <div className="flex items-center justify-between mb-1.5 gap-2">
+          <span className={`font-semibold truncate flex items-center gap-1.5 ${wonA ? (santaAnaWon ? 'text-amber-800' : 'text-brand-green') : 'text-slate-900'}`}>
+            {wonA && santaAnaWon && <Trophy size={16} className="text-amber-500 flex-shrink-0" />}
+            <span className="truncate">{match.teamA}</span>
+          </span>
+          <span className={`font-bold text-xl tabular-nums flex-shrink-0 ${wonA ? (santaAnaWon ? 'text-amber-800' : 'text-brand-green') : 'text-slate-400'}`}>{setsA}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className={`truncate ${wonB ? 'text-brand-green-dark font-semibold' : 'text-slate-700'}`}>{match.teamB}</span>
-          <span className={`font-bold text-xl tabular-nums ml-2 flex-shrink-0 ${wonB ? 'text-brand-green-dark' : 'text-slate-400'}`}>{setsB}</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className={`truncate flex items-center gap-1.5 ${wonB ? (santaAnaWon ? 'text-amber-800 font-semibold' : 'text-brand-green-dark font-semibold') : 'text-slate-700'}`}>
+            {wonB && santaAnaWon && <Trophy size={16} className="text-amber-500 flex-shrink-0" />}
+            <span className="truncate">{match.teamB}</span>
+          </span>
+          <span className={`font-bold text-xl tabular-nums flex-shrink-0 ${wonB ? (santaAnaWon ? 'text-amber-800' : 'text-brand-green-dark') : 'text-slate-400'}`}>{setsB}</span>
         </div>
-        <div className="text-xs text-slate-500 mt-2 flex items-center gap-2 font-normal">
+        <div className="text-xs text-slate-500 mt-2 flex items-center gap-2 font-normal flex-wrap">
           {new Date(match.startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
           {!match.finished && (
             <span className="text-red-500 font-semibold flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-red-500 rounded-full pulse-live" /> EN VIVO
             </span>
+          )}
+          {santaAnaWon && (
+            <span className="text-amber-700 font-bold tracking-wide">¡VICTORIA!</span>
           )}
           {match.location && <span className="text-slate-400 truncate">· {match.location}</span>}
         </div>
