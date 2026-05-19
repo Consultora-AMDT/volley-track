@@ -682,8 +682,9 @@ function MatchView({ matchId }) {
     const prev = prevWinnerRef.current;
     if (prev === null && curr) {
       const teamName = curr === 'A' ? match.teamA : match.teamB;
+      const lastSet = match.format === 'bo5' ? 'set 5' : 'set 3';
       setToast({
-        message: `🏆 ¡${teamName} gana el partido! Sigue jugando como entrenamiento.`,
+        message: `🏆 ¡${teamName} gana! Seguid jugando hasta el ${lastSet}.`,
         kind: 'success',
         key: Date.now(),
       });
@@ -853,15 +854,15 @@ function MatchView({ matchId }) {
           <TeamHeader name={match.teamB} sets={setsB} serving={match.server === 'B' && !match.finished} color="green-dark" />
         </div>
 
-        {/* Banner: equipo ha ganado el partido pero seguimos jugando "como
-            entrenamiento". Aparece cuando winner está seteado pero el partido
-            no se ha finalizado manualmente (finished=false). */}
+        {/* Banner: equipo ha ganado el partido pero seguimos jugando hasta
+            completar el formato (3 sets en BO3, 5 sets en BO5). El cierre
+            es automático al terminar el último set. */}
         {match.winner && !match.finished && (
           <div className="mt-3 px-3 py-2 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-300 rounded-xl flex items-center gap-2 text-amber-900">
             <Trophy size={18} className="text-amber-600 flex-shrink-0" />
             <div className="text-[13px] leading-tight">
               <span className="font-bold">{match.winner === 'A' ? match.teamA : match.teamB}</span> gana el partido.
-              <span className="text-amber-700"> Seguid jugando como entrenamiento — pulsad "Finalizar" cuando queráis cerrar.</span>
+              <span className="text-amber-700"> Seguid jugando hasta el {match.format === 'bo5' ? 'set 5' : 'set 3'} — el partido se cierra solo al terminarlo.</span>
             </div>
           </div>
         )}
