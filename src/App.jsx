@@ -315,18 +315,47 @@ function HomeView({ userId }) {
         </button>
       )}
 
-      <button
-        onClick={() => navigate('#/setup')}
-        className="w-full mb-3 p-5 bg-white rounded-2xl font-semibold flex items-center justify-between transition border border-slate-200 shadow-card hover:shadow-card-md"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-brand-green-soft flex items-center justify-center">
-            <Plus size={22} className="text-brand-green" />
+      {/* "Nuevo partido": cuando ya hay un partido en vivo el botón se
+          deshabilita para evitar que se creen partidos duplicados sin
+          querer (caso típico: dos padres/madres crean en paralelo y se
+          quedan dos partidos a la vez en el mismo evento). El usuario
+          tiene que entrar al partido en vivo y finalizarlo (o
+          eliminarlo) antes de poder crear uno nuevo. */}
+      {inProgress ? (
+        <button
+          onClick={() => setToast({
+            message: `Termina primero "${inProgress.teamA} vs ${inProgress.teamB}"`,
+            kind: 'warn',
+            key: Date.now(),
+          })}
+          className="w-full mb-3 p-5 bg-slate-100 border border-slate-200 rounded-2xl flex items-center justify-between cursor-not-allowed"
+          aria-disabled="true"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-slate-200 flex items-center justify-center flex-shrink-0">
+              <Plus size={22} className="text-slate-400" />
+            </div>
+            <div className="text-left min-w-0">
+              <div className="text-base text-slate-400 font-semibold">Nuevo partido</div>
+              <div className="text-xs text-slate-500 font-normal truncate">Finaliza el partido en vivo primero</div>
+            </div>
           </div>
-          <span className="text-base text-slate-900">Nuevo partido</span>
-        </div>
-        <ChevronLeft className="rotate-180 text-slate-400" size={18} />
-      </button>
+          <AlertTriangle size={18} className="text-amber-500 flex-shrink-0 ml-2" />
+        </button>
+      ) : (
+        <button
+          onClick={() => navigate('#/setup')}
+          className="w-full mb-3 p-5 bg-white rounded-2xl font-semibold flex items-center justify-between transition border border-slate-200 shadow-card hover:shadow-card-md"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-brand-green-soft flex items-center justify-center">
+              <Plus size={22} className="text-brand-green" />
+            </div>
+            <span className="text-base text-slate-900">Nuevo partido</span>
+          </div>
+          <ChevronLeft className="rotate-180 text-slate-400" size={18} />
+        </button>
+      )}
 
       <button
         onClick={() => navigate('#/history')}
@@ -537,6 +566,26 @@ function SetupView({ userId }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
   const [picker, setPicker] = useState(null); // {scope: 'starter'|'bench', idx} para elegir de plantilla
+
+  // Guard: si el usuario ya tiene un partido EN VIVO entre sus visitados,
+  // no debería estar aquí. Esto cubre el caso de que llegue al SetupView
+  // por gesto atrás del móvil o por link directo (en HomeView ya se
+  // bloquea el botón "Nuevo partido"). Al detectarlo, redirige a Inicio
+  // mostrando un aviso. La comprobación es asíncrona y silenciosa: si
+  // todo va bien, no se ve nada en pantalla.
+  useEffect(() => {
+    let cancelled = false;
+    listMatchesByIds(getVisitedIds()).then((matches) => {
+      if (cancelled) return;
+      const live = matches.find((m) => !m.finished);
+      if (live) {
+        // Pequeño delay para que la transición de pantalla no sea brusca
+        // y para que el toast llegue tras montarse la HomeView.
+        setTimeout(() => navigate(''), 50);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const canStart = teamA.trim() && teamB.trim() && !creating;
   // La plantilla del cole está SIEMPRE activa (esta app es del Santa Ana).
