@@ -1414,11 +1414,21 @@ function MatchView({ matchId }) {
 
 function TeamHeader({ name, sets, serving, color }) {
   const t = colorTokens(color);
+  // Adaptamos el tamaño del nombre a su longitud, en vez de truncar con "...".
+  // Para nombres cortos (≤14 caracteres) usamos text-sm; para nombres medios
+  // (≤22) text-[12px]; para muy largos (>22) text-[11px]. En todos los casos
+  // el texto puede ocupar hasta 2 líneas con break-words. min-h fija la
+  // altura del bloque del nombre a 2 líneas para que las dos tarjetas tengan
+  // los marcadores ("0", "SETS") alineados horizontalmente entre ambos
+  // equipos sin importar si uno tiene un nombre más largo.
+  const nameSize = name.length > 22 ? 'text-[11px]'
+                 : name.length > 14 ? 'text-[12px]'
+                 : 'text-sm';
   return (
     <div className={`flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0`}>
-      <div className="flex items-center gap-1 mb-0.5">
-        {serving && <span className="text-base">🏐</span>}
-        <span className="font-semibold text-slate-900 truncate text-sm">{name}</span>
+      <div className="flex items-start gap-1 mb-1 min-h-[2.6em]">
+        {serving && <span className="text-base leading-tight flex-shrink-0">🏐</span>}
+        <span className={`font-semibold text-slate-900 leading-tight break-words ${nameSize}`}>{name}</span>
       </div>
       <div className={`text-3xl font-bold tabular-nums text-center ${t.text}`}>{sets}</div>
       <div className="text-[15px] text-slate-500 uppercase tracking-wide font-semibold text-center">sets</div>
@@ -1553,6 +1563,14 @@ function FinishedSummary({ match, onReopen }) {
 
 function ScoreButton({ name, score, onAdd, onSubtract, color }) {
   const t = colorTokens(color);
+  // Tamaño adaptativo del nombre, igual que en TeamHeader. Hasta 2 líneas
+  // con break-words. Aquí el ancho disponible es mayor (la mitad de la
+  // pantalla) así que los umbrales son más generosos. line-clamp-2
+  // garantiza que un nombre patológicamente largo (>40 chars) no rompa
+  // la altura de la tarjeta.
+  const nameSize = name.length > 18 ? 'text-[12px]'
+                 : name.length > 12 ? 'text-[13px]'
+                 : 'text-[15px]';
   return (
     <div className="rounded-2xl overflow-hidden shadow-card-md flex flex-col">
       <button
@@ -1560,7 +1578,7 @@ function ScoreButton({ name, score, onAdd, onSubtract, color }) {
         className={`aspect-[3/4] bg-gradient-to-br from-white to-slate-50 border border-slate-200 border-b-0 p-3 flex flex-col justify-between ${t.activeFrom} ${t.activeTo} active:text-white transition`}
       >
         <div className="text-left">
-          <div className="text-[15px] text-slate-500 uppercase tracking-wider truncate font-bold">{name}</div>
+          <div className={`text-slate-500 uppercase tracking-wider font-bold leading-tight break-words line-clamp-2 ${nameSize}`}>{name}</div>
         </div>
         <ScoreNumber score={score} accent={t.text} />
         <div className={`flex items-center justify-center gap-1 ${t.text} font-bold`}>
