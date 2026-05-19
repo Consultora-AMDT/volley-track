@@ -1136,6 +1136,7 @@ function MatchView({ matchId }) {
   const inflight = useRef(false);
   const prevPositionsRef = useRef(null);
   const prevWinnerRef = useRef(); // sentinel: undefined = aún sin inicializar
+  const prevSetsCountRef = useRef(null); // último (setsA, setsB) observado para detectar empate decisivo
   const initializedRef = useRef(false);
 
   useEffect(() => { trackVisited(matchId); }, [matchId]);
@@ -1185,6 +1186,37 @@ function MatchView({ matchId }) {
     }
     prevWinnerRef.current = curr;
   }, [match?.winner]);
+
+  // Detectar cuando se cierra un set y resulta en EMPATE DECISIVO (1-1 en
+  // BO3, 2-2 en BO5). En esos casos el siguiente set decide el partido y
+  // queremos avisar al/la padre/madre con un toast informativo. Se muestra
+  // una sola vez por evento usando prevSetsCountRef para evitar repetir
+  // el aviso al cambiar de tab o tras reabrir el match.
+  useEffect(() => {
+    if (!match || match.finished || match.winner) return;
+    const closedSets = uniqueSetsByNumber(match.sets);
+    const setsA = closedSets.filter((s) => s.a > s.b).length;
+    const setsB = closedSets.filter((s) => s.b > s.a).length;
+    const key = `${setsA}-${setsB}`;
+    if (prevSetsCountRef.current === null) {
+      prevSetsCountRef.current = key;
+      return;
+    }
+    if (prevSetsCountRef.current !== key) {
+      const isDecisiveDraw =
+        (match.format === 'bo3' && setsA === 1 && setsB === 1) ||
+        (match.format === 'bo5' && setsA === 2 && setsB === 2);
+      if (isDecisiveDraw) {
+        setToast({
+          key: Date.now(),
+          kind: 'info',
+          message: 'El próximo set decide el partido 🏐',
+          highlight: 'Set decisivo',
+        });
+      }
+      prevSetsCountRef.current = key;
+    }
+  }, [match?.sets, match?.winner, match?.finished, match?.format]);
 
   // Detectar cambios en posiciones (rotación o edición de plantilla)
   useEffect(() => {
@@ -1473,7 +1505,7 @@ function MatchView({ matchId }) {
         <WinnerCelebrationModal
           teamName={winnerCelebration.team === 'A' ? match.teamA : match.teamB}
           isLocal={winnerCelebration.team === 'A'}
-          lastSetLabel={match.format === 'bo5' ? 'set 5' : 'set 3'}
+          format={match.format}
           onClose={() => setWinnerCelebration(null)}
         />
       )}
@@ -1492,14 +1524,30 @@ function TeamHeader({ name, sets, serving, color, maxNameLength }) {
   //   >22 chars   →  14px (text-sm)
   // items-stretch en el contenedor padre se encarga de igualar la altura
   // de ambas cards aunque uno de los equipos tenga el nombre mas largo.
+  //
+  // El indicador de saque (🏐) va como BADGE ABSOLUTO en la esquina
+  // superior izquierda de la card, NO inline antes del nombre. Si fuera
+  // inline rompería la alineación entre las dos cards: el equipo que saca
+  // tendría más ancho de contenido y su número de sets quedaría a distinta
+  // altura que el del otro equipo. Como badge absoluto el emoji no afecta
+  // al layout del texto y los dos números siempre quedan a la misma altura.
   const len = maxNameLength ?? name.length;
   const nameSize = len > 22 ? 'text-sm'
                  : len > 14 ? 'text-base'
                  : 'text-lg';
   return (
-    <div className={`flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0 flex flex-col items-center justify-center text-center`}>
+    <div className={`relative flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0 flex flex-col items-center justify-center text-center`}>
+      {serving && (
+        <span
+          className="absolute top-1.5 left-1.5 text-sm leading-none select-none"
+          aria-label="Saca este equipo"
+          role="img"
+        >
+          🏐
+        </span>
+      )}
       <div className={`font-semibold text-slate-900 leading-tight break-words ${nameSize}`}>
-        {serving && <span className="mr-1">🏐</span>}{name}
+        {name}
       </div>
       <div className="flex items-baseline gap-1.5 mt-1.5">
         <span className={`text-3xl font-bold tabular-nums leading-none ${t.text}`}>{sets}</span>
@@ -1825,7 +1873,7 @@ function ConfirmModal({ title, message, confirmText, cancelText = 'Cancelar', va
 // Modal grande de celebración que aparece la primera vez que un equipo
 // alcanza los sets necesarios. Confetti CSS puro (sin librerías) cayendo
 // sobre un card con trofeo animado y el nombre del equipo ganador.
-function WinnerCelebrationModal({ teamName, isLocal, lastSetLabel, onClose }) {
+function WinnerCelebrationModal({ teamName, isLocal, format, onClose }) {
   // Generamos 60 piezas de confetti con propiedades aleatorias estables
   // por instancia del componente (useMemo).
   const confettiPieces = React.useMemo(() => {
@@ -1889,14 +1937,15 @@ function WinnerCelebrationModal({ teamName, isLocal, lastSetLabel, onClose }) {
         </div>
 
         <div className="mt-5 p-3 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl text-[13px] text-amber-900 leading-snug">
-          Seguid jugando hasta el <span className="font-bold">{lastSetLabel}</span> — el partido se cierra solo al terminarlo.
+          <strong>El partido ya está decidido.</strong>{' '}
+          Si jugáis el resto de sets, no afectan al resultado final.
         </div>
 
         <button
           onClick={onClose}
           className="mt-5 w-full p-3.5 bg-gradient-to-br from-brand-green to-brand-green-dark text-white rounded-2xl font-bold text-base shadow-card active:scale-[0.98] transition"
         >
-          ¡A por el último set! 💪
+          ¡Continuar! 🏐
         </button>
       </div>
     </div>
