@@ -1,7 +1,7 @@
 // ⚠️ Ajusta estos valores antes de desplegar.
 // Estos son los canales por los que los padres te enviarán sugerencias.
 
-export const APP_VERSION = '1.8.8';
+export const APP_VERSION = '1.8.9';
 
 export const FEEDBACK = {
   // Tu número de WhatsApp con código de país, SIN "+", espacios ni guiones

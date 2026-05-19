@@ -21,6 +21,16 @@ import { VersionFooter } from './VersionFooter.jsx';
 const POSITION_LABELS = ['Saque', 'Izquierda', 'Colocador/a', 'Derecha'];
 const POSITION_SHORT = ['P1', 'P2', 'P3', 'P4'];
 
+// Desactivamos la restauración automática de scroll del navegador a nivel
+// de módulo (antes de que React monte). Sin esto, al pulsar el botón
+// "atrás" del móvil el browser restaura la posición de scroll de la
+// pantalla anterior ANTES de que dispararse hashchange, y nuestro
+// scrollTo(0,0) llega tarde — el usuario ve la pantalla con scroll
+// heredado durante un instante o de forma permanente según el navegador.
+if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual';
+}
+
 // ============ ROUTER (hash) ============
 function parseHash() {
   const h = window.location.hash || '';
@@ -115,25 +125,37 @@ export default function App() {
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   useEffect(() => {
-    const onHash = () => {
-      setRoute(parseHash());
-      // Cada cambio de ruta empieza desde el top de la pantalla, para
-      // evitar que la siguiente vista herede el scroll de la anterior.
-      // Es defensa redundante con el scrollTo de navigate(); ambas son
-      // baratas y juntas eliminan el bug del marcador cortado.
-      if (typeof window !== 'undefined') {
-        try {
-          window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
-        } catch {}
-      }
+    // Helper: scroll a top, robusto frente a las distintas APIs del browser.
+    const scrollTop = () => {
+      if (typeof window === 'undefined') return;
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      } catch {}
     };
-    window.addEventListener('hashchange', onHash);
+    // hashchange se dispara en navegaciones forward y en programáticas.
+    // popstate se dispara cuando el usuario pulsa el botón "atrás" del
+    // móvil (browser back). Ambos llevan a re-parsear la ruta y resetear
+    // el scroll, así escuchamos los dos para cubrir todas las navegaciones.
+    const onRoute = () => {
+      setRoute(parseHash());
+      // Scroll inmediato (síncrono) + diferido (tras el paint, por si el
+      // navegador restaura el scroll de cache después del evento).
+      scrollTop();
+      requestAnimationFrame(scrollTop);
+      setTimeout(scrollTop, 50);
+    };
+    window.addEventListener('hashchange', onRoute);
+    window.addEventListener('popstate', onRoute);
+    // Re-aseguramos scrollRestoration manual (por si algo lo restauró).
     if ('scrollRestoration' in window.history) {
       window.history.scrollRestoration = 'manual';
     }
-    return () => window.removeEventListener('hashchange', onHash);
+    return () => {
+      window.removeEventListener('hashchange', onRoute);
+      window.removeEventListener('popstate', onRoute);
+    };
   }, []);
 
   useEffect(() => {
