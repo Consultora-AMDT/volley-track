@@ -38,6 +38,16 @@ function parseHash() {
 // Usamos history.replaceState y disparamos hashchange manualmente porque
 // replaceState no lo lanza por sí mismo.
 const navigate = (h, opts = {}) => {
+  // Forzamos el scroll al top antes de cambiar la ruta para evitar que la
+  // siguiente pantalla aparezca con el scroll heredado de la anterior
+  // (causa raíz del "marcador cortado" al venir del formulario).
+  if (typeof window !== 'undefined') {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    } catch {}
+  }
   if (opts.replace) {
     const url = window.location.pathname + window.location.search + h;
     window.history.replaceState(null, '', url);
@@ -51,17 +61,23 @@ const navigate = (h, opts = {}) => {
 const formatHHMM = (ts) => new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
 function formatDuration(ms) {
-  const total = Math.max(0, Math.floor(ms / 60_000));
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  return h > 0 ? `${h}h ${m}min` : `${m}min`;
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  // Padding a 2 dígitos para minutos y segundos cuando hay horas, o
+  // segundos cuando hay minutos. Así se lee como un cronómetro.
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+  if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
+  return `${s}s`;
 }
 
 function useNow(active) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => setNow(Date.now()), 30_000);
+    // Cada segundo para que el cronómetro muestre los segundos vivos.
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [active]);
   return now;
@@ -99,8 +115,24 @@ export default function App() {
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   useEffect(() => {
-    const onHash = () => setRoute(parseHash());
+    const onHash = () => {
+      setRoute(parseHash());
+      // Cada cambio de ruta empieza desde el top de la pantalla, para
+      // evitar que la siguiente vista herede el scroll de la anterior.
+      // Es defensa redundante con el scrollTo de navigate(); ambas son
+      // baratas y juntas eliminan el bug del marcador cortado.
+      if (typeof window !== 'undefined') {
+        try {
+          window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        } catch {}
+      }
+    };
     window.addEventListener('hashchange', onHash);
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
@@ -162,13 +194,34 @@ function OfflineBanner() {
 }
 
 // ============ TOAST ============
-function Toast({ message, kind = 'info', onClose }) {
+// El campo `highlight` muestra un texto destacado a tamaño mayor justo debajo
+// de `message`, con todo el contenido centrado. Útil para anunciar acciones
+// como "↻ Rotación aplicada" + "Saca Paula H #3" donde el nombre del jugador
+// merece más visibilidad.
+function Toast({ message, highlight, kind = 'info', onClose }) {
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   const styles = kind === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-900'
                : kind === 'error' ? 'bg-red-50 border-red-200 text-red-900'
                : kind === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                : 'bg-white border-slate-200 text-slate-900';
   const Icon = kind === 'success' ? CheckCircle2 : AlertTriangle;
+  if (highlight) {
+    return (
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4 animate-in">
+        <div className={`relative p-3 pr-9 rounded-2xl border shadow-card-md text-sm ${styles}`}>
+          <div className="flex flex-col items-center gap-1 text-center">
+            <div className="flex items-center gap-2 font-medium">
+              <Icon size={16} /> <span>{message}</span>
+            </div>
+            <div className="text-base font-bold leading-tight">{highlight}</div>
+          </div>
+          <button onClick={onClose} className="absolute top-3 right-3 opacity-50">
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4 animate-in">
       <div className={`p-3 rounded-2xl border shadow-card-md text-sm flex items-center gap-2 ${styles}`}>
@@ -293,7 +346,7 @@ function HomeView({ userId }) {
       <FeedbackButton />
       <VersionFooter />
 
-      {toast && <Toast key={toast.key} message={toast.message} kind={toast.kind} onClose={() => setToast(null)} />}
+      {toast && <Toast key={toast.key} message={toast.message} highlight={toast.highlight} kind={toast.kind} onClose={() => setToast(null)} />}
 
       {confirmDelete && (
         <ConfirmModal
@@ -313,12 +366,18 @@ function HomeView({ userId }) {
   );
 }
 
-// Detecta si el nombre de un equipo es el Santa Ana (acepta variantes
-// como "Santa Ana", "Santa Ana y San Rafael", "Colegio Santa Ana", etc.).
+// Detecta si el nombre de un equipo es el Santa Ana / San Rafael. Acepta
+// variantes y abreviaturas comunes que escriben los padres/madres:
+// "Santa Ana", "Sta Ana", "Sta. Ana", "San Rafael", "S. Rafael",
+// "Colegio Santa Ana y San Rafael", o bien "SA"/"SR" como código exacto.
 function isSantaAnaName(name) {
   if (!name) return false;
-  const n = name.toLowerCase();
-  return n.includes('santa ana') || n.includes('san rafael');
+  const n = name.toLowerCase().trim();
+  if (n === 'sa' || n === 'sr') return true;
+  // \b delimita la frontera de palabra para no hacer match con "santana"
+  // (pegado, otro contexto). Acepta espacio o sin espacio entre Sta/S y
+  // el resto, con punto opcional tras la abreviatura.
+  return /\b(santa\s*ana|sta\.?\s*ana|san\s*rafael|s\.?\s*rafael)\b/.test(n);
 }
 
 // Asigna colores a los dos equipos del partido. El cole (Santa Ana o
@@ -953,7 +1012,7 @@ function MatchView({ matchId }) {
       window.history.scrollRestoration = 'manual';
     }
     const scrollTop = () => {
-      window.scrollTo(0, 0);
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
     };
@@ -998,19 +1057,19 @@ function MatchView({ matchId }) {
       if (isRot) {
         setRotationFlash(true);
         setTimeout(() => setRotationFlash(false), 1500);
-        // Anuncia también quién pasa a estar en P1 (saque) tras la rotación.
-        // Solo añadimos el sufijo si estamos en el bando que saca: tras una
-        // rotación nuestra (side-out o tras el 4º consecutivo), pasamos a
-        // sacar, así que el nombre tiene sentido. Si el rival es quien
-        // saca, mantenemos el mensaje simple.
+        // Tras una rotación, el/la jugador/a en P1 pasa a sacar. Lo
+        // mostramos como `highlight` (segunda línea destacada y centrada)
+        // para que se lea de un vistazo aunque el padre/madre esté lejos
+        // del móvil.
         const newServer = match.positions[0];
         const serverName = newServer?.name;
         const serverNumber = newServer?.number;
-        const serverLabel = serverName
-          ? ` · Saca ${serverName}${serverNumber != null ? ` #${serverNumber}` : ''}`
-          : '';
+        const highlight = serverName
+          ? `Saca ${serverName}${serverNumber != null ? ` #${serverNumber}` : ''}`
+          : null;
         setToast({
-          message: `↻ Rotación aplicada${serverLabel}`,
+          message: '↻ Rotación aplicada',
+          highlight,
           kind: 'info',
           key: Date.now(),
         });
@@ -1138,7 +1197,7 @@ function MatchView({ matchId }) {
 
   return (
     <div>
-      {toast && <Toast key={toast.key} message={toast.message} kind={toast.kind} onClose={() => setToast(null)} />}
+      {toast && <Toast key={toast.key} message={toast.message} highlight={toast.highlight} kind={toast.kind} onClose={() => setToast(null)} />}
       {/* Header sticky */}
       <div className="px-5 pt-10 pb-3 sticky top-0 bg-slate-50/95 backdrop-blur-md z-10 border-b border-slate-200">
         <div className="flex items-center justify-between mb-3">
@@ -2063,7 +2122,7 @@ function HistoryView({ userId }) {
       )}
       <VersionFooter />
 
-      {toast && <Toast key={toast.key} message={toast.message} kind={toast.kind} onClose={() => setToast(null)} />}
+      {toast && <Toast key={toast.key} message={toast.message} highlight={toast.highlight} kind={toast.kind} onClose={() => setToast(null)} />}
 
       {confirmDelete && (
         <ConfirmModal

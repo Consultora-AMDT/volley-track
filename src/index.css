@@ -42,10 +42,12 @@ input, textarea {
   font-size: 1rem; /* escala con html, >=16px evita zoom iOS */
 }
 
-/* Scroll suave nativo */
-* {
-  scroll-behavior: smooth;
-}
+/* No usamos scroll-behavior: smooth global porque interfiere con los
+   scrollTo(0,0) programáticos al cambiar de ruta: el browser anima el
+   scroll y otras manipulaciones del viewport durante la transición pueden
+   interrumpir la animación, dejando la pantalla a medio scroll y los
+   botones del marcador parcialmente tapados. Si se necesita scroll suave
+   en algún punto concreto, se aplica con behavior:'smooth' inline. */
 
 /* Animación de aparición */
 @keyframes fadeIn {
