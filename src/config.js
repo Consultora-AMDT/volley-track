@@ -1,7 +1,7 @@
 // ⚠️ Ajusta estos valores antes de desplegar.
 // Estos son los canales por los que los padres te enviarán sugerencias.
 
-export const APP_VERSION = '1.9.15';
+export const APP_VERSION = '1.9.16';
 
 export const FEEDBACK = {
   // Tu número de WhatsApp con código de país, SIN "+", espacios ni guiones
@@ -19,6 +19,13 @@ export const LIMITS = {
   locationMax: 60,
   feedbackMax: 1000,
 };
+
+// Minutos de inactividad tras los cuales un partido se cierra y archiva
+// automáticamente. Inactividad = sin updates en la fila de Supabase (nadie
+// ha sumado/restado punto, ni sustituido jugadores, ni rotado, etc.). Útil
+// para que partidos abandonados no bloqueen la creación de uno nuevo (porque
+// hay una regla: solo un partido en vivo a la vez por padre/madre).
+export const STALE_MATCH_MINUTES = 30;
 
 // Plantilla preconfigurada del cole, ordenada por dorsal.
 // Para añadir/quitar jugadores/as, edita este array.

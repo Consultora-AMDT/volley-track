@@ -12,7 +12,7 @@ import {
   subscribeToMatch,
 } from './api.js';
 import { trackVisited, getVisitedIds, forgetVisited, getLastSeenVersion, setLastSeenVersion } from './storage.js';
-import { LIMITS, SANTA_ANA_ROSTER, APP_VERSION } from './config.js';
+import { LIMITS, SANTA_ANA_ROSTER, APP_VERSION, STALE_MATCH_MINUTES } from './config.js';
 import { FeedbackButton } from './FeedbackButton.jsx';
 import { ShareButton } from './ShareButton.jsx';
 import { VersionFooter } from './VersionFooter.jsx';
@@ -324,7 +324,43 @@ function HomeView({ userId }) {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    listMatchesByIds(getVisitedIds()).then((m) => { setMatches(m); setLoading(false); });
+    (async () => {
+      let list = await listMatchesByIds(getVisitedIds());
+
+      // Auto-cierre de partidos abandonados. Criterio: !finished y updated_at
+      // mas antiguo que STALE_MATCH_MINUTES. Los partidos abandonados son un
+      // problema porque la regla "solo un partido en vivo a la vez" impide
+      // crear uno nuevo hasta que se cierren. Asi se cierran solos al abrir
+      // la app, sin requerir intervencion del usuario ni cron en backend.
+      try {
+        const cutoff = Date.now() - STALE_MATCH_MINUTES * 60 * 1000;
+        const stale = list.filter((m) => !m.finished && m.updatedAt < cutoff);
+        if (stale.length > 0) {
+          const closedNames = [];
+          for (const m of stale) {
+            try {
+              const closed = await finishMatch(m.id);
+              const idx = list.findIndex((x) => x.id === m.id);
+              if (idx >= 0) list[idx] = closed;
+              closedNames.push(`${m.teamA} vs ${m.teamB}`);
+            } catch (e) {
+              console.error('No se pudo auto-cerrar partido', m.id, e);
+            }
+          }
+          if (closedNames.length > 0) {
+            const msg = closedNames.length === 1
+              ? `"${closedNames[0]}" se cerró por inactividad (${STALE_MATCH_MINUTES} min sin actividad)`
+              : `${closedNames.length} partidos cerrados por inactividad`;
+            setToast({ key: Date.now(), kind: 'info', message: msg, highlight: 'Auto-cierre' });
+          }
+        }
+      } catch (e) {
+        console.error('Error en auto-cierre de partidos', e);
+      }
+
+      setMatches(list);
+      setLoading(false);
+    })();
   }, [userId]);
 
   const handleDelete = async () => {
@@ -1192,6 +1228,38 @@ function MatchView({ matchId }) {
     const t2 = setTimeout(scrollTop, 200);
     return () => { clearTimeout(t); clearTimeout(t2); };
   }, [matchId, loading, tab]);
+
+  // Auto-cierre por inactividad: si el partido lleva mas de STALE_MATCH_MINUTES
+  // minutos sin ningun update en BD (nadie ha sumado/restado/sustituido,
+  // etc.), lo finalizamos automaticamente. Se chequea al cargar el match
+  // y luego cada 60s mientras esta abierto.
+  //
+  // Nota sobre dependencia: el effect se reinicia cuando cambia
+  // match.updatedAt, lo cual sucede con cada interaccion. Eso es deseable:
+  // cualquier accion del usuario "resetea" el contador implicitamente
+  // porque cambia updatedAt -> nuevo cutoff -> 30 min frescos.
+  useEffect(() => {
+    if (!match || match.finished) return;
+    const check = () => {
+      const cutoff = Date.now() - STALE_MATCH_MINUTES * 60 * 1000;
+      if (match.updatedAt < cutoff) {
+        finishMatch(matchId)
+          .then((closed) => {
+            setMatch(closed);
+            setToast({
+              key: Date.now(),
+              kind: 'info',
+              message: `Cerrado automáticamente tras ${STALE_MATCH_MINUTES} min sin actividad`,
+              highlight: 'Auto-cierre',
+            });
+          })
+          .catch((e) => console.error('No se pudo auto-cerrar partido', e));
+      }
+    };
+    check(); // chequeo inmediato al cargar / cuando cambia el match
+    const interval = setInterval(check, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [match?.updatedAt, match?.finished, matchId]);
 
   // Detectar cuando se proclama un ganador (winner pasa de null a 'A'/'B')
   // para abrir un modal de celebración grande con confetti y trofeo. El
