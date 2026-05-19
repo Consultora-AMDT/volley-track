@@ -1145,8 +1145,11 @@ function MatchView({ matchId }) {
     if (!match || match.finished) return;
     haptic(); setSyncing(true);
     try {
-      const m = await apiSubtractPoint(matchId, team);
-      setMatch(m);
+      const res = await apiSubtractPoint(matchId, team);
+      setMatch(res.match);
+      if (res.deduped) {
+        showToast(`Resta ya aplicada hace ${res.secondsAgo ?? 0}s por otro padre/madre`, 'warn');
+      }
     } catch (e) {
       console.error(e);
       showToast('No se pudo restar', 'error');

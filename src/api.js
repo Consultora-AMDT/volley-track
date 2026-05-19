@@ -126,12 +126,19 @@ export async function undoPoint(matchId) {
 
 // Resta 1 punto del marcador del equipo indicado (correción de error).
 // A diferencia de undo_point, NO depende del último punto: corrige el set actual.
+// Desde v1.9.1, el RPC aplica la misma ventana antirebote de 10s que add_point:
+// si la misma resta llega dos veces seguidas (dos padres/madres pulsando a la vez),
+// solo cuenta una. Devuelve {match, deduped, secondsAgo} igual que addPoint.
 export async function subtractPoint(matchId, team) {
   const { data, error } = await supabase.rpc('subtract_point', {
     p_match_id: matchId, p_team: team,
   });
   if (error) throw error;
-  return fromRow(data);
+  return {
+    match: fromRow(data.match),
+    deduped: data.deduped === true,
+    secondsAgo: data.seconds_ago ?? null,
+  };
 }
 
 // Reabre un partido finalizado por error. Vía RPC reopen_match (v1.4.3):
