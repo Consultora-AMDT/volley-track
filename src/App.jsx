@@ -130,13 +130,9 @@ export default function App() {
   const [updatedFromVersion, setUpdatedFromVersion] = useState(null);
 
   // Detección de actualización: compara la versión guardada con la actual.
-  // - Primera ejecución (nada guardado): mostramos el modal asumiendo que
-  //   vienen de v1.9.7 (la inmediatamente anterior). Esto fuerza que la
-  //   gente que ya tenía la app vea el aviso al pasar a v1.9.9 — antes
-  //   de v1.9.8 no guardábamos versión, así que sin esto el primer modal
-  //   solo aparecería al pasar a v1.9.10.
-  //   NOTA: revertir esta rama en v1.9.10 (ya no es necesaria; a partir
-  //   de entonces todo el mundo tendrá una lastSeen registrada).
+  // - Primera ejecución (nada guardado): registramos APP_VERSION
+  //   silenciosamente. No es una "actualización", es alguien que abre
+  //   la app por primera vez.
   // - Versión guardada == APP_VERSION: nada que hacer.
   // - Versión guardada != APP_VERSION: muestra el modal y actualiza la
   //   versión guardada cuando el usuario pulsa OK.
@@ -145,7 +141,7 @@ export default function App() {
     if (last && last !== APP_VERSION) {
       setUpdatedFromVersion(last);
     } else if (!last) {
-      setUpdatedFromVersion('1.9.7');
+      setLastSeenVersion(APP_VERSION);
     }
   }, []);
 
@@ -1480,24 +1476,28 @@ function MatchView({ matchId }) {
 
 function TeamHeader({ name, sets, serving, color, maxNameLength }) {
   const t = colorTokens(color);
-  // El tamaño de fuente se calcula sobre el nombre MÁS LARGO de los dos
-  // equipos (no sobre el propio), para que ambas cards usen la misma
-  // tipografía y se vean simétricas. Si no se pasa maxNameLength,
-  // cae al propio (modo compatible con usos antiguos).
-  //   <=14 chars  →  16px (text-base)
-  //   <=22 chars  →  14px (text-sm)
-  //   >22 chars   →  12px
+  // El numero grande de sets y la etiqueta "SETS" van en la MISMA linea
+  // (flex con baseline), ahorrando una linea vertical de espacio. Ese
+  // espacio liberado se aprovecha para subir un escalon todos los tamanos
+  // del nombre del equipo:
+  //   <=14 chars  →  18px (text-lg)
+  //   <=22 chars  →  16px (text-base)
+  //   >22 chars   →  14px (text-sm)
+  // items-stretch en el contenedor padre se encarga de igualar la altura
+  // de ambas cards aunque uno de los equipos tenga el nombre mas largo.
   const len = maxNameLength ?? name.length;
-  const nameSize = len > 22 ? 'text-[12px]'
-                 : len > 14 ? 'text-sm'
-                 : 'text-base';
+  const nameSize = len > 22 ? 'text-sm'
+                 : len > 14 ? 'text-base'
+                 : 'text-lg';
   return (
     <div className={`flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0 flex flex-col items-center justify-center text-center`}>
       <div className={`font-semibold text-slate-900 leading-tight break-words ${nameSize}`}>
         {serving && <span className="mr-1">🏐</span>}{name}
       </div>
-      <div className={`text-3xl font-bold tabular-nums mt-1.5 ${t.text}`}>{sets}</div>
-      <div className="text-[13px] text-slate-500 uppercase tracking-wide font-semibold leading-none mt-0.5">sets</div>
+      <div className="flex items-baseline gap-1.5 mt-1.5">
+        <span className={`text-3xl font-bold tabular-nums leading-none ${t.text}`}>{sets}</span>
+        <span className="text-[13px] text-slate-500 uppercase tracking-wide font-semibold leading-none">sets</span>
+      </div>
     </div>
   );
 }
