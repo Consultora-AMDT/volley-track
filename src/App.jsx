@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Trophy, Users, RotateCw, Plus, Minus, ChevronLeft, Home, History, Play,
   Wifi, WifiOff, AlertTriangle, Edit3, Check, X, CheckCircle2, Clock, Trash2,
-  Share2, Copy, MessageCircle,
+  Share2, Copy,
 } from 'lucide-react';
 import {
   isConfigured, ensureAuth, onAuthChange,
@@ -627,9 +627,9 @@ function SetupView({ userId }) {
         <div className="space-y-2">
           {starters.map((p, i) => (
             <div key={i} className="flex items-center gap-2">
-              <div className="w-14 h-14 rounded-xl bg-brand-green-soft flex flex-col items-center justify-center font-bold text-brand-green flex-shrink-0">
+              <div className="w-14 h-14 rounded-xl bg-brand-green-soft flex flex-col items-center justify-center font-bold text-brand-green flex-shrink-0 px-1 py-1.5">
                 <div className="text-xs leading-none">{POSITION_SHORT[i]}</div>
-                <div className="text-[14px] font-medium leading-none mt-0.5">{POSITION_LABELS[i]}</div>
+                <div className="text-[11px] font-medium leading-tight mt-1 text-center w-full">{POSITION_LABELS[i]}</div>
               </div>
               {rosterLoaded ? (
                 <button
@@ -800,14 +800,6 @@ function ShareAfterCreateModal({ match, onContinue }) {
     }
   };
 
-  const whatsapp = () => {
-    window.open(
-      `https://wa.me/?text=${encodeURIComponent(message)}`,
-      '_blank',
-      'noopener,noreferrer'
-    );
-  };
-
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in">
       <div className="bg-white rounded-t-3xl sm:rounded-3xl p-5 w-full max-w-md shadow-card-lg animate-in-pop max-h-[90vh] overflow-y-auto">
@@ -837,13 +829,16 @@ function ShareAfterCreateModal({ match, onContinue }) {
           {url}
         </div>
 
-        {/* Botones de compartir */}
+        {/* Botones de compartir: Compartir (share nativo del SO, incluye
+            WhatsApp / Messages / AirDrop / Telegram / etc.) y Copiar
+            enlace. El share nativo hace fallback a copiar si el navegador
+            no lo soporta. */}
         <div className="grid grid-cols-2 gap-2 mb-2">
           <button
-            onClick={whatsapp}
-            className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition shadow-card"
+            onClick={shareNative}
+            className="p-3 bg-brand-green hover:bg-brand-green-dark text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition shadow-card"
           >
-            <MessageCircle size={18} /> WhatsApp
+            <Share2 size={18} /> Compartir
           </button>
           <button
             onClick={copyLink}
@@ -855,16 +850,6 @@ function ShareAfterCreateModal({ match, onContinue }) {
             }
           </button>
         </div>
-
-        {/* Share nativo si el SO lo soporta */}
-        {typeof navigator !== 'undefined' && navigator.share && (
-          <button
-            onClick={shareNative}
-            className="w-full p-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold flex items-center justify-center gap-2 transition mb-2"
-          >
-            <Share2 size={18} /> Más opciones de compartir
-          </button>
-        )}
 
         <p className="text-[12px] text-slate-400 text-center mb-3 mt-1">
           Cualquier padre/madre con el enlace podrá ver y editar el partido.
@@ -1886,9 +1871,9 @@ function RosterModal({ positions, bench, onSave, onClose }) {
             <div className="space-y-2 mb-5">
               {court.map((p, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <div className="w-14 h-14 rounded-xl bg-brand-green-soft flex flex-col items-center justify-center font-bold text-brand-green flex-shrink-0">
+                  <div className="w-14 h-14 rounded-xl bg-brand-green-soft flex flex-col items-center justify-center font-bold text-brand-green flex-shrink-0 px-1 py-1.5">
                     <div className="text-xs leading-none">{POSITION_SHORT[i]}</div>
-                    <div className="text-[9px] font-medium leading-none mt-0.5 px-1 text-center">{POSITION_LABELS[i]}</div>
+                    <div className="text-[11px] font-medium leading-tight mt-1 text-center w-full">{POSITION_LABELS[i]}</div>
                   </div>
                   {renamingIdx === i ? (
                     <input
