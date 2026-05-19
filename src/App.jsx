@@ -361,14 +361,36 @@ function SetupView({ userId }) {
   const rosterLoaded = true;
 
   // Devuelve las jugadoras de la plantilla del cole que aún no están en
-  // titulares ni en banquillo. Se usa en el picker para que cada jugadora
-  // solo se pueda añadir una vez. Filtramos por nombre normalizado.
+  // titulares ni en banquillo. Solo para "añadir suplente" — la jugadora
+  // tiene que estar realmente libre.
   const availableFromRoster = () => {
     const usedNames = new Set();
     [...starters, ...bench].forEach((p) => {
       if (p.name?.trim()) usedNames.add(p.name.trim().toLowerCase());
     });
     return SANTA_ANA_ROSTER.filter((p) => !usedNames.has(p.name.toLowerCase()));
+  };
+
+  // Para elegir una titular: excluye solo a las que ya ocupan OTROS slots
+  // de titular (porque no se pueden duplicar en el campo). Incluye a las del
+  // banquillo (para hacer swap: ella sube, la actual baja) y a las sin
+  // asignar. Cada opción lleva un marcador _source que el modal usa para
+  // mostrar visualmente de dónde viene la jugadora.
+  const availableForStarter = (currentIdx) => {
+    const inOtherStarters = new Set();
+    starters.forEach((p, i) => {
+      if (i !== currentIdx && p?.name?.trim()) {
+        inOtherStarters.add(p.name.trim().toLowerCase());
+      }
+    });
+    return SANTA_ANA_ROSTER
+      .filter((p) => !inOtherStarters.has(p.name.toLowerCase()))
+      .map((p) => {
+        const inBench = bench.some(
+          (b) => b?.name && b.name.toLowerCase() === p.name.toLowerCase()
+        );
+        return { ...p, _source: inBench ? 'bench' : 'free' };
+      });
   };
 
   const loadRoster = () => {
@@ -393,15 +415,18 @@ function SetupView({ userId }) {
 
   const pickFromRoster = (pickedPlayer) => {
     if (!picker) return;
+    // _source es un marcador del modal (bench/free) para mostrar el badge.
+    // Lo quitamos antes de guardar para no contaminar los datos persistidos.
+    const { _source, ...clean } = pickedPlayer;
     if (picker.scope === 'starter') {
       const ns = [...starters];
       // Si la jugadora estaba en banquillo, sácala
       setBench(bench.filter(
-        (b) => !(b.name === pickedPlayer.name && b.number === pickedPlayer.number)
+        (b) => !(b.name === clean.name && b.number === clean.number)
       ));
       // Si ya había alguien en este puesto y tiene nombre, mándalo al banquillo
       const previous = ns[picker.idx];
-      ns[picker.idx] = { ...pickedPlayer };
+      ns[picker.idx] = { ...clean };
       setStarters(ns);
       if (previous.name?.trim()) {
         setBench((prev) => [...prev, previous]);
@@ -410,9 +435,9 @@ function SetupView({ userId }) {
       // Añadir al banquillo (en la posición picker.idx si es válida)
       const nb = [...bench];
       if (picker.idx === 'new') {
-        nb.push({ ...pickedPlayer });
+        nb.push({ ...clean });
       } else {
-        nb[picker.idx] = { ...pickedPlayer };
+        nb[picker.idx] = { ...clean };
       }
       setBench(nb);
     }
@@ -595,7 +620,9 @@ function SetupView({ userId }) {
           title={picker.scope === 'starter'
             ? `Elegir ${POSITION_LABELS[picker.idx].toLowerCase()} (${POSITION_SHORT[picker.idx]})`
             : 'Añadir suplente'}
-          options={availableFromRoster()}
+          options={picker.scope === 'starter'
+            ? availableForStarter(picker.idx)
+            : availableFromRoster()}
           onPick={pickFromRoster}
           onClose={() => setPicker(null)}
         />
@@ -604,7 +631,11 @@ function SetupView({ userId }) {
   );
 }
 
-// Modal genérico que muestra la plantilla del cole para elegir una jugadora
+// Modal genérico que muestra la plantilla del cole para elegir una jugadora.
+// Cada opción puede llevar un campo _source: 'bench' (está actualmente en
+// banquillo → al elegirla se hace swap con la titular saliente) o 'free'
+// (sin asignar → entra directamente como titular). Se muestra un badge
+// visual para que el usuario lo entienda.
 function RosterPickerModal({ title, options, onPick, onClose }) {
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
@@ -621,13 +652,20 @@ function RosterPickerModal({ title, options, onPick, onClose }) {
               <button
                 key={`${p.name}-${p.number}`}
                 onClick={() => onPick(p)}
-                className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-left font-medium hover:border-brand-green hover:bg-brand-green-soft/40 transition flex items-center justify-between"
+                className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-left font-medium hover:border-brand-green hover:bg-brand-green-soft/40 transition flex items-center justify-between gap-2"
               >
-                <span className="flex items-center gap-3">
-                  <span className="w-9 h-9 bg-brand-green-soft text-brand-green-dark rounded-lg flex items-center justify-center font-mono font-bold text-sm">{p.number}</span>
-                  <span className="text-slate-900">{p.name}</span>
+                <span className="flex items-center gap-3 min-w-0">
+                  <span className="w-9 h-9 bg-brand-green-soft text-brand-green-dark rounded-lg flex items-center justify-center font-mono font-bold text-sm flex-shrink-0">{p.number}</span>
+                  <span className="text-slate-900 truncate">{p.name}</span>
                 </span>
-                <ChevronLeft size={16} className="rotate-180 text-slate-400" />
+                <span className="flex items-center gap-2 flex-shrink-0">
+                  {p._source === 'bench' && (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                      Banquillo
+                    </span>
+                  )}
+                  <ChevronLeft size={16} className="rotate-180 text-slate-400" />
+                </span>
               </button>
             ))}
           </div>
@@ -1344,14 +1382,32 @@ function RosterModal({ positions, bench, onSave, onClose }) {
   const rosterLoaded = true;
 
   // Jugadoras del cole no usadas ni en campo ni en banquillo.
-  // Filtramos por nombre normalizado (lowercase trim) para que también
-  // funcione con partidos viejos donde las jugadoras no tenían dorsal.
+  // Solo para "añadir suplente" — la jugadora debe estar libre.
   const availableFromRoster = () => {
     const usedNames = new Set();
     [...court, ...benchList].forEach((p) => {
       if (p?.name?.trim()) usedNames.add(p.name.trim().toLowerCase());
     });
     return SANTA_ANA_ROSTER.filter((p) => !usedNames.has(p.name.toLowerCase()));
+  };
+
+  // Para elegir titular: incluye también a las del banquillo (swap directo).
+  // Excluye solo a las que ya están en OTROS slots de titular.
+  const availableForStarter = (currentIdx) => {
+    const inOtherStarters = new Set();
+    court.forEach((p, i) => {
+      if (i !== currentIdx && p?.name?.trim()) {
+        inOtherStarters.add(p.name.trim().toLowerCase());
+      }
+    });
+    return SANTA_ANA_ROSTER
+      .filter((p) => !inOtherStarters.has(p.name.toLowerCase()))
+      .map((p) => {
+        const inBench = benchList.some(
+          (b) => b?.name && b.name.toLowerCase() === p.name.toLowerCase()
+        );
+        return { ...p, _source: inBench ? 'bench' : 'free' };
+      });
   };
 
   const handleSubstitute = (incomingIdx) => {
@@ -1382,20 +1438,22 @@ function RosterModal({ positions, bench, onSave, onClose }) {
 
   const handlePick = (pickedPlayer) => {
     if (!picker) return;
+    // _source es marcador del modal, no se persiste.
+    const { _source, ...clean } = pickedPlayer;
     let nc = court;
     let nb = benchList;
     if (picker.scope === 'starter') {
       const previous = { ...court[picker.idx] };
       nc = [...court];
-      nc[picker.idx] = { ...pickedPlayer };
+      nc[picker.idx] = { ...clean };
       nb = benchList.filter(
-        (b) => !(b.name === pickedPlayer.name && b.number === pickedPlayer.number)
+        (b) => !(b.name === clean.name && b.number === clean.number)
       );
       if (previous.name?.trim()) nb = [...nb, previous];
       setCourt(nc);
       setBench(nb);
     } else if (picker.scope === 'bench') {
-      nb = [...benchList, { ...pickedPlayer }];
+      nb = [...benchList, { ...clean }];
       setBench(nb);
     }
     setPicker(null);
@@ -1563,7 +1621,9 @@ function RosterModal({ positions, bench, onSave, onClose }) {
             title={picker.scope === 'starter'
               ? `Cambiar ${POSITION_LABELS[picker.idx].toLowerCase()} (${POSITION_SHORT[picker.idx]})`
               : 'Añadir suplente del cole'}
-            options={availableFromRoster()}
+            options={picker.scope === 'starter'
+              ? availableForStarter(picker.idx)
+              : availableFromRoster()}
             onPick={handlePick}
             onClose={() => setPicker(null)}
           />
