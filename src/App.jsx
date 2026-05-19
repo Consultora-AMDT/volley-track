@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Trophy, Users, RotateCw, Plus, Minus, ChevronLeft, Home, History, Play,
   Wifi, WifiOff, AlertTriangle, Edit3, Check, X, CheckCircle2, Clock, Trash2,
+  Share2, Copy, MessageCircle,
 } from 'lucide-react';
 import {
   isConfigured, ensureAuth, onAuthChange,
@@ -464,6 +465,11 @@ function SetupView({ userId }) {
     setPicker(null);
   };
 
+  // Tras crear el partido se abre un modal de compartir para que el padre
+  // creador pueda enviarlo al grupo de WhatsApp inmediatamente. La navegación
+  // al match ocurre al cerrar el modal (botón "Ir al partido").
+  const [createdMatch, setCreatedMatch] = useState(null);
+
   const handleStart = async () => {
     setCreating(true); setError(null);
     try {
@@ -487,7 +493,8 @@ function SetupView({ userId }) {
         bench: benchPlayers,
       }, userId);
       trackVisited(m.id);
-      navigate(`#/match/${m.id}`);
+      setCreatedMatch(m);
+      setCreating(false);
     } catch (e) {
       setError(e.message || 'Error al crear el partido');
       setCreating(false);
@@ -647,6 +654,145 @@ function SetupView({ userId }) {
           onClose={() => setPicker(null)}
         />
       )}
+
+      {createdMatch && (
+        <ShareAfterCreateModal
+          match={createdMatch}
+          onContinue={() => {
+            navigate(`#/match/${createdMatch.id}`);
+            setCreatedMatch(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Modal que aparece automáticamente tras crear un partido nuevo, antes de
+// navegar a la pantalla del match. Permite al padre/madre creador compartir
+// el enlace al grupo de WhatsApp en el momento de crear el partido (que es
+// cuando suele querer hacerlo). Botones para WhatsApp, copiar al portapapeles,
+// share nativo del sistema, y "Ir al partido" para continuar.
+function ShareAfterCreateModal({ match, onContinue }) {
+  const [copied, setCopied] = useState(false);
+
+  const url = `${window.location.origin}/#/match/${match.id}`;
+  const message = `🏐 Sigue el partido EN VIVO\n${match.teamA} vs ${match.teamB}${match.location ? `\n📍 ${match.location}` : ''}\n\n${url}`;
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {}
+      document.body.removeChild(ta);
+    }
+  };
+
+  const shareNative = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${match.teamA} vs ${match.teamB}`,
+          text: message,
+          url,
+        });
+      } catch (e) {
+        if (e.name !== 'AbortError') console.warn(e);
+      }
+    } else {
+      // Fallback: si no hay share nativo, copia el enlace
+      copyLink();
+    }
+  };
+
+  const whatsapp = () => {
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(message)}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in">
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl p-5 w-full max-w-md shadow-card-lg animate-in-pop max-h-[90vh] overflow-y-auto">
+        {/* Cabecera con check verde */}
+        <div className="flex flex-col items-center text-center mb-4">
+          <div className="w-14 h-14 rounded-full bg-brand-green-soft flex items-center justify-center mb-2">
+            <CheckCircle2 size={32} className="text-brand-green" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-900">¡Partido creado!</h3>
+          <p className="text-[14px] text-slate-500 mt-1 px-2">
+            Compártelo con el grupo de padres para que puedan seguirlo en vivo.
+          </p>
+        </div>
+
+        {/* Detalles del partido */}
+        <div className="mb-4 p-3 bg-brand-green-soft border border-brand-green/20 rounded-2xl">
+          <div className="font-semibold text-slate-900 text-center text-[15px]">
+            {match.teamA} <span className="text-slate-400">vs</span> {match.teamB}
+          </div>
+          {match.location && (
+            <div className="text-xs text-slate-500 text-center mt-1">📍 {match.location}</div>
+          )}
+        </div>
+
+        {/* URL para copiar */}
+        <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 break-all font-mono">
+          {url}
+        </div>
+
+        {/* Botones de compartir */}
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <button
+            onClick={whatsapp}
+            className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition shadow-card"
+          >
+            <MessageCircle size={18} /> WhatsApp
+          </button>
+          <button
+            onClick={copyLink}
+            className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold flex items-center justify-center gap-2 transition"
+          >
+            {copied
+              ? (<><Check size={18} className="text-emerald-500" /> Copiado</>)
+              : (<><Copy size={18} /> Copiar</>)
+            }
+          </button>
+        </div>
+
+        {/* Share nativo si el SO lo soporta */}
+        {typeof navigator !== 'undefined' && navigator.share && (
+          <button
+            onClick={shareNative}
+            className="w-full p-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold flex items-center justify-center gap-2 transition mb-2"
+          >
+            <Share2 size={18} /> Más opciones de compartir
+          </button>
+        )}
+
+        <p className="text-[12px] text-slate-400 text-center mb-3 mt-1">
+          Cualquier padre con el enlace podrá ver y editar el partido.
+        </p>
+
+        {/* Continuar al match */}
+        <button
+          onClick={onContinue}
+          className="w-full p-3.5 bg-gradient-to-br from-brand-green to-brand-green-dark text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2 shadow-card transition active:scale-[0.98]"
+        >
+          Ir al partido <Play size={18} />
+        </button>
+      </div>
     </div>
   );
 }
