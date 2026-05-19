@@ -130,19 +130,22 @@ export default function App() {
   const [updatedFromVersion, setUpdatedFromVersion] = useState(null);
 
   // Detección de actualización: compara la versión guardada con la actual.
-  // - Primera ejecución (nada guardado): solo guarda APP_VERSION, sin modal.
+  // - Primera ejecución (nada guardado): mostramos el modal asumiendo que
+  //   vienen de v1.9.7 (la inmediatamente anterior). Esto fuerza que la
+  //   gente que ya tenía la app vea el aviso al pasar a v1.9.9 — antes
+  //   de v1.9.8 no guardábamos versión, así que sin esto el primer modal
+  //   solo aparecería al pasar a v1.9.10.
+  //   NOTA: revertir esta rama en v1.9.10 (ya no es necesaria; a partir
+  //   de entonces todo el mundo tendrá una lastSeen registrada).
   // - Versión guardada == APP_VERSION: nada que hacer.
   // - Versión guardada != APP_VERSION: muestra el modal y actualiza la
   //   versión guardada cuando el usuario pulsa OK.
-  // Se hace en useEffect (no a nivel módulo) para que React tenga el state
-  // listo cuando llegamos a este punto.
   useEffect(() => {
     const last = getLastSeenVersion();
     if (last && last !== APP_VERSION) {
       setUpdatedFromVersion(last);
     } else if (!last) {
-      // Primera ejecución: registramos la versión actual sin avisar.
-      setLastSeenVersion(APP_VERSION);
+      setUpdatedFromVersion('1.9.7');
     }
   }, []);
 
