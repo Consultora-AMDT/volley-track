@@ -1195,8 +1195,14 @@ function MatchView({ matchId }) {
     haptic(); setSyncing(true);
     try {
       const res = await apiSubtractPoint(matchId, team);
-      setMatch(res.match);
-      if (res.deduped) {
+      // Defensa: solo actualizamos el match si el RPC devolvió algo
+      // utilizable. Si el formato fuera inesperado (RPC antiguo sin
+      // migración o respuesta corrupta), evitamos pisar el state con
+      // null/undefined y romper la pantalla.
+      if (res && res.match) {
+        setMatch(res.match);
+      }
+      if (res?.deduped) {
         showToast(`Resta ya aplicada hace ${res.secondsAgo ?? 0}s por otro padre/madre`, 'warn');
       }
     } catch (e) {

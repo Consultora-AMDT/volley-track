@@ -126,18 +126,38 @@ export async function undoPoint(matchId) {
 
 // Resta 1 punto del marcador del equipo indicado (correción de error).
 // A diferencia de undo_point, NO depende del último punto: corrige el set actual.
-// Desde v1.9.1, el RPC aplica la misma ventana antirebote de 10s que add_point:
-// si la misma resta llega dos veces seguidas (dos padres/madres pulsando a la vez),
-// solo cuenta una. Devuelve {match, deduped, secondsAgo} igual que addPoint.
+//
+// Compatible con DOS formatos de respuesta del RPC:
+//
+//  - Nuevo (v1.9.1 con la migración SQL aplicada): el RPC devuelve un
+//    JSONB con la forma {match, deduped, seconds_ago} igual que add_point,
+//    permitiendo deduplicar pulsaciones duplicadas en una ventana de 10 s.
+//
+//  - Antiguo (RPC original sin migración): el RPC devuelve la row de
+//    matches directamente. Detectamos este caso porque `data` viene con
+//    los campos del match (id, team_a, etc.) en lugar de venir envuelto
+//    en una propiedad `match`.
+//
+// Mantener la compatibilidad evita la "pantalla en blanco" si el cliente
+// se actualiza antes que la migración SQL.
 export async function subtractPoint(matchId, team) {
   const { data, error } = await supabase.rpc('subtract_point', {
     p_match_id: matchId, p_team: team,
   });
   if (error) throw error;
+  if (data && typeof data === 'object' && 'match' in data) {
+    // Formato nuevo
+    return {
+      match: fromRow(data.match),
+      deduped: data.deduped === true,
+      secondsAgo: data.seconds_ago ?? null,
+    };
+  }
+  // Formato antiguo: row directa
   return {
-    match: fromRow(data.match),
-    deduped: data.deduped === true,
-    secondsAgo: data.seconds_ago ?? null,
+    match: fromRow(data),
+    deduped: false,
+    secondsAgo: null,
   };
 }
 
