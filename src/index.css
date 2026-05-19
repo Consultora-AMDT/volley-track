@@ -77,3 +77,42 @@ input, textarea {
 .animate-rotation-flash {
   animation: rotation-flash 1.4s ease-out;
 }
+
+/* ============ Celebración del ganador ============ */
+/* Confetti que cae desde arriba de la pantalla con deriva horizontal y giro */
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(var(--rot-start, 0deg));
+    opacity: 0;
+  }
+  10% { opacity: 1; }
+  100% {
+    transform: translate3d(var(--drift, 0px), 110vh, 0) rotate(calc(var(--rot-start, 0deg) + 720deg));
+    opacity: 1;
+  }
+}
+
+/* Bounce del trofeo en el modal de celebración */
+@keyframes trophy-bounce {
+  0%, 100% { transform: scale(1) rotate(-3deg); }
+  20% { transform: scale(1.15) rotate(8deg); }
+  40% { transform: scale(0.95) rotate(-5deg); }
+  60% { transform: scale(1.08) rotate(4deg); }
+  80% { transform: scale(0.98) rotate(-2deg); }
+}
+
+.animate-trophy-bounce {
+  animation: trophy-bounce 1.8s ease-in-out infinite;
+  display: inline-block;
+}
+
+/* Entrada del card de celebración: zoom + fade más expresivo que fadeIn */
+@keyframes in-pop {
+  0%   { opacity: 0; transform: scale(0.7) translateY(20px); }
+  60%  { opacity: 1; transform: scale(1.04) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-in-pop {
+  animation: in-pop 420ms cubic-bezier(.2, .9, .3, 1.1);
+}

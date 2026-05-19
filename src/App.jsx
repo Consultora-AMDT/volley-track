@@ -694,6 +694,7 @@ function MatchView({ matchId }) {
   const [editingLineup, setEditingLineup] = useState(false);
   const [quickSubIdx, setQuickSubIdx] = useState(null); // null | 0..3 — posición sobre la que se quiere sustituir directamente
   const [rotationFlash, setRotationFlash] = useState(false);
+  const [winnerCelebration, setWinnerCelebration] = useState(null); // {team: 'A'|'B'} cuando hay que mostrar el modal celebratorio
   const [confirmReopen, setConfirmReopen] = useState(false);
   const inflight = useRef(false);
   const prevPositionsRef = useRef(null);
@@ -702,51 +703,51 @@ function MatchView({ matchId }) {
 
   useEffect(() => { trackVisited(matchId); }, [matchId]);
 
-  // Al entrar a un partido, forzar el scroll de la página al top. El navegador
-  // a veces restaura una posición anterior (por ejemplo si el usuario ya había
-  // visitado este match y scrolleado) y la cabecera sticky deja los botones
-  // de PUNTO medio tapados al volver. Desactivamos restoration automática y
-  // hacemos scroll explícito al top tanto al cambiar matchId como cuando el
-  // match termina de cargar (loading pasa de true a false) y cuando se cambia
-  // de tab (Marcador ↔ Rotación) para garantizar que cada vista empiece arriba.
+  // Forzar el scroll al top al abrir el partido o cambiar de tab. Se usa un
+  // triple fallback para cubrir todos los casos de navegación móvil:
+  //   1. scrollTo síncrono inmediato.
+  //   2. requestAnimationFrame anidado (espera al primer paint).
+  //   3. setTimeout 50ms (red de seguridad para PWAs que ignoran lo anterior).
+  // También desactivamos la restauración automática del scroll del browser.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if ('scrollRestoration' in window.history) {
       window.history.scrollRestoration = 'manual';
     }
-    window.scrollTo(0, 0);
-    // Doble llamada con requestAnimationFrame para cubrir el caso de que
-    // el browser intente restaurar el scroll después del primer paint.
+    const scrollTop = () => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    scrollTop();
     if (typeof requestAnimationFrame !== 'undefined') {
-      requestAnimationFrame(() => window.scrollTo(0, 0));
+      requestAnimationFrame(() => {
+        scrollTop();
+        requestAnimationFrame(scrollTop);
+      });
     }
+    const t = setTimeout(scrollTop, 50);
+    const t2 = setTimeout(scrollTop, 200);
+    return () => { clearTimeout(t); clearTimeout(t2); };
   }, [matchId, loading, tab]);
 
   // Detectar cuando se proclama un ganador (winner pasa de null a 'A'/'B')
-  // para mostrar un toast grande de celebración. El partido NO se cierra;
-  // sigue activo para que en el cole jueguen el set extra "de entrenamiento".
+  // para abrir un modal de celebración grande con confetti y trofeo. El
+  // partido NO se cierra; sigue jugando hasta completar el formato (set 3
+  // en BO3, set 5 en BO5). El cierre es automático tras el último set.
   useEffect(() => {
     if (!match) return;
     const curr = match.winner || null;
-    // En el primer render con match cargado, solo memorizamos el estado
-    // inicial sin disparar el toast (puede que el match ya viniera con
-    // ganador desde antes de abrir la app).
     if (prevWinnerRef.current === undefined) {
       prevWinnerRef.current = curr;
       return;
     }
     const prev = prevWinnerRef.current;
     if (prev === null && curr) {
-      const teamName = curr === 'A' ? match.teamA : match.teamB;
-      const lastSet = match.format === 'bo5' ? 'set 5' : 'set 3';
-      setToast({
-        message: `🏆 ¡${teamName} gana! Seguid jugando hasta el ${lastSet}.`,
-        kind: 'success',
-        key: Date.now(),
-      });
+      setWinnerCelebration({ team: curr });
     }
     prevWinnerRef.current = curr;
-  }, [match?.winner, match?.teamA, match?.teamB]);
+  }, [match?.winner]);
 
   // Detectar cambios en posiciones (rotación o edición de plantilla)
   useEffect(() => {
@@ -1000,6 +1001,15 @@ function MatchView({ matchId }) {
           variant="primary"
           onConfirm={handleReopen}
           onClose={() => setConfirmReopen(false)}
+        />
+      )}
+
+      {winnerCelebration && (
+        <WinnerCelebrationModal
+          teamName={winnerCelebration.team === 'A' ? match.teamA : match.teamB}
+          isLocal={winnerCelebration.team === 'A'}
+          lastSetLabel={match.format === 'bo5' ? 'set 5' : 'set 3'}
+          onClose={() => setWinnerCelebration(null)}
         />
       )}
     </div>
@@ -1291,6 +1301,88 @@ function ConfirmModal({ title, message, confirmText, cancelText = 'Cancelar', va
             {confirmText}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ WINNER CELEBRATION MODAL ============
+// Modal grande de celebración que aparece la primera vez que un equipo
+// alcanza los sets necesarios. Confetti CSS puro (sin librerías) cayendo
+// sobre un card con trofeo animado y el nombre del equipo ganador.
+function WinnerCelebrationModal({ teamName, isLocal, lastSetLabel, onClose }) {
+  // Generamos 60 piezas de confetti con propiedades aleatorias estables
+  // por instancia del componente (useMemo).
+  const confettiPieces = React.useMemo(() => {
+    const colors = ['#007E59', '#006048', '#4EB05D', '#FBBF24', '#F59E0B', '#EF4444', '#8B5CF6', '#3B82F6', '#EC4899'];
+    return Array.from({ length: 60 }).map((_, i) => ({
+      id: i,
+      left: Math.random() * 100,           // % horizontal
+      delay: Math.random() * 0.8,          // s
+      duration: 2.5 + Math.random() * 2.5, // s (2.5 - 5s)
+      color: colors[i % colors.length],
+      size: 6 + Math.random() * 8,         // px
+      rotate: Math.random() * 360,         // deg inicial
+      drift: -50 + Math.random() * 100,    // deriva horizontal
+      shape: Math.random() > 0.5 ? 'square' : 'circle',
+    }));
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-hidden bg-slate-900/60 backdrop-blur-sm animate-in"
+      onClick={onClose}
+    >
+      {/* Confetti */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {confettiPieces.map((p) => (
+          <span
+            key={p.id}
+            className="absolute top-0 block"
+            style={{
+              left: `${p.left}%`,
+              width: `${p.size}px`,
+              height: `${p.size}px`,
+              backgroundColor: p.color,
+              borderRadius: p.shape === 'circle' ? '50%' : '2px',
+              animation: `confetti-fall ${p.duration}s ${p.delay}s cubic-bezier(.2,.6,.4,1) infinite`,
+              '--drift': `${p.drift}px`,
+              '--rot-start': `${p.rotate}deg`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Card central */}
+      <div
+        className="relative bg-white rounded-3xl shadow-card-lg p-7 w-full max-w-sm text-center animate-in-pop"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Trofeo grande con bounce */}
+        <div className="text-7xl mb-2 animate-trophy-bounce select-none" aria-hidden="true">
+          🏆
+        </div>
+
+        <div className="text-xs uppercase tracking-widest font-bold text-amber-600 mb-1">
+          ¡Ganador del partido!
+        </div>
+        <div className="text-2xl font-bold text-slate-900 mb-1 leading-tight break-words">
+          {teamName}
+        </div>
+        <div className="text-base text-slate-600 mb-1">
+          {isLocal ? 'gana el partido 🎉' : 'gana el partido'}
+        </div>
+
+        <div className="mt-5 p-3 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl text-[13px] text-amber-900 leading-snug">
+          Seguid jugando hasta el <span className="font-bold">{lastSetLabel}</span> — el partido se cierra solo al terminarlo.
+        </div>
+
+        <button
+          onClick={onClose}
+          className="mt-5 w-full p-3.5 bg-gradient-to-br from-brand-green to-brand-green-dark text-white rounded-2xl font-bold text-base shadow-card active:scale-[0.98] transition"
+        >
+          ¡A por el último set! 💪
+        </button>
       </div>
     </div>
   );
