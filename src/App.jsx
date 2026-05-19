@@ -998,7 +998,22 @@ function MatchView({ matchId }) {
       if (isRot) {
         setRotationFlash(true);
         setTimeout(() => setRotationFlash(false), 1500);
-        setToast({ message: '↻ Rotación aplicada', kind: 'info', key: Date.now() });
+        // Anuncia también quién pasa a estar en P1 (saque) tras la rotación.
+        // Solo añadimos el sufijo si estamos en el bando que saca: tras una
+        // rotación nuestra (side-out o tras el 4º consecutivo), pasamos a
+        // sacar, así que el nombre tiene sentido. Si el rival es quien
+        // saca, mantenemos el mensaje simple.
+        const newServer = match.positions[0];
+        const serverName = newServer?.name;
+        const serverNumber = newServer?.number;
+        const serverLabel = serverName
+          ? ` · Saca ${serverName}${serverNumber != null ? ` #${serverNumber}` : ''}`
+          : '';
+        setToast({
+          message: `↻ Rotación aplicada${serverLabel}`,
+          kind: 'info',
+          key: Date.now(),
+        });
       } else {
         setToast({ message: '✏️ Plantilla actualizada', kind: 'info', key: Date.now() });
       }
