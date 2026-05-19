@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
-import { Share2, Copy, Check, MessageCircle } from 'lucide-react';
+import { Share2, Copy, Check } from 'lucide-react';
 
+// Botón "Compartir" que aparece dentro del partido (en MatchView). Al pulsar
+// se intenta el share nativo del SO (que ya incluye WhatsApp, Messages,
+// AirDrop, Telegram, etc.). Si no está disponible o el usuario lo cancela,
+// se abre un modal de fallback con la URL en texto plano, un botón
+// "Compartir" para reintentar el share nativo y un botón "Copiar" para
+// copiar el enlace al portapapeles.
 export function ShareButton({ match }) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
@@ -30,11 +36,6 @@ export function ShareButton({ match }) {
     setOpen(true);
   };
 
-  const whatsapp = () => {
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
-    setOpen(false);
-  };
-
   return (
     <>
       <button
@@ -56,16 +57,25 @@ export function ShareButton({ match }) {
             </div>
 
             <div className="grid grid-cols-2 gap-2 mb-3">
-              <button onClick={whatsapp} className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition">
-                <MessageCircle size={18} /> WhatsApp
+              <button
+                onClick={shareNative}
+                className="p-3 bg-brand-green hover:bg-brand-green-dark text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition shadow-card"
+              >
+                <Share2 size={18} /> Compartir
               </button>
-              <button onClick={copyLink} className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold flex items-center justify-center gap-2 transition">
-                {copied ? <><Check size={18} className="text-emerald-500" /> Copiado</> : <><Copy size={18} /> Copiar</>}
+              <button
+                onClick={copyLink}
+                className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold flex items-center justify-center gap-2 transition"
+              >
+                {copied
+                  ? (<><Check size={18} className="text-emerald-500" /> Copiado</>)
+                  : (<><Copy size={18} /> Copiar</>)
+                }
               </button>
             </div>
 
-            <p className="text-[16px] text-slate-400 text-center">
-              Cualquier padre con el enlace podrá ver y editar el partido.
+            <p className="text-[13px] text-slate-400 text-center">
+              Cualquier padre/madre con el enlace podrá ver y editar el partido.
             </p>
           </div>
         </div>

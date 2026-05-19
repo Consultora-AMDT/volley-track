@@ -377,7 +377,7 @@ function HomeView({ userId }) {
 
       <div className="mt-6 p-4 bg-brand-green-soft/60 rounded-2xl border border-brand-green/10">
         <p className="text-xs text-slate-700 leading-relaxed">
-          <strong className="text-brand-green-dark">¿Te han pasado un enlace?</strong> Ábrelo desde WhatsApp. El partido aparecerá aquí y podrás sumar puntos junto al resto del grupo.
+          <strong className="text-brand-green-dark">¿Te han pasado un enlace?</strong> Ábrelo y el partido aparecerá aquí; podrás sumar puntos junto al resto del grupo.
         </p>
       </div>
 
