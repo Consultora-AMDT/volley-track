@@ -1898,7 +1898,7 @@ function RotationTab({ match, flash, onRotate, onEditLineup, onCellClick }) {
         {isServingA && streak > 0 && (
           <div className={`mt-3 text-center text-[13px] font-semibold ${ta.textDark}`}>
             Saques seguidos: {streak} / 3
-            {streak >= 3 && <span className="ml-1 text-red-500">· al próximo punto rota</span>}
+            {streak >= 2 && <span className="ml-1 text-red-500">· al próximo punto rota</span>}
           </div>
         )}
         <div className="mt-2 text-center text-[12px] text-slate-500">
