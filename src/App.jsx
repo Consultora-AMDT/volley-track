@@ -1299,9 +1299,9 @@ function MatchView({ matchId }) {
         </div>
 
         <div className="flex items-stretch gap-2">
-          <TeamHeader name={match.teamA} sets={setsA} serving={match.server === 'A' && !match.finished} color={colorA} />
+          <TeamHeader name={match.teamA} sets={setsA} serving={match.server === 'A' && !match.finished} color={colorA} maxNameLength={Math.max(match.teamA.length, match.teamB.length)} />
           <div className="flex items-center text-slate-300 text-base font-bold">VS</div>
-          <TeamHeader name={match.teamB} sets={setsB} serving={match.server === 'B' && !match.finished} color={colorB} />
+          <TeamHeader name={match.teamB} sets={setsB} serving={match.server === 'B' && !match.finished} color={colorB} maxNameLength={Math.max(match.teamA.length, match.teamB.length)} />
         </div>
 
         {/* Banner: equipo ha ganado el partido pero seguimos jugando hasta
@@ -1412,18 +1412,18 @@ function MatchView({ matchId }) {
   );
 }
 
-function TeamHeader({ name, sets, serving, color }) {
+function TeamHeader({ name, sets, serving, color, maxNameLength }) {
   const t = colorTokens(color);
-  // Sin min-h y sin layout flex con icono a la izquierda. El nombre va
-  // centrado con el balón inline antes del texto cuando saca. Al ahorrar
-  // ese padding vertical artificial, podemos usar fuentes más grandes:
+  // El tamaño de fuente se calcula sobre el nombre MÁS LARGO de los dos
+  // equipos (no sobre el propio), para que ambas cards usen la misma
+  // tipografía y se vean simétricas. Si no se pasa maxNameLength,
+  // cae al propio (modo compatible con usos antiguos).
   //   <=14 chars  →  16px (text-base)
   //   <=22 chars  →  14px (text-sm)
   //   >22 chars   →  12px
-  // items-stretch en el contenedor padre se encarga de igualar la altura
-  // de ambas cards aunque uno de los equipos tenga el nombre más largo.
-  const nameSize = name.length > 22 ? 'text-[12px]'
-                 : name.length > 14 ? 'text-sm'
+  const len = maxNameLength ?? name.length;
+  const nameSize = len > 22 ? 'text-[12px]'
+                 : len > 14 ? 'text-sm'
                  : 'text-base';
   return (
     <div className={`flex-1 p-3 ${t.bgSoft} rounded-2xl min-w-0 flex flex-col items-center justify-center text-center`}>
@@ -1469,8 +1469,8 @@ function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <ScoreButton name={match.teamA} score={match.currentSet.a} onAdd={() => onPoint('A')} onSubtract={() => onSubtract('A')} color={colorA} />
-            <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} onSubtract={() => onSubtract('B')} color={colorB} />
+            <ScoreButton name={match.teamA} score={match.currentSet.a} onAdd={() => onPoint('A')} onSubtract={() => onSubtract('A')} color={colorA} maxNameLength={Math.max(match.teamA.length, match.teamB.length)} />
+            <ScoreButton name={match.teamB} score={match.currentSet.b} onAdd={() => onPoint('B')} onSubtract={() => onSubtract('B')} color={colorB} maxNameLength={Math.max(match.teamA.length, match.teamB.length)} />
           </div>
           <p className="text-[16px] text-slate-500 text-center mb-4 px-4 leading-relaxed">
             Si varios padres/madres pulsan el mismo punto en menos de 10s, solo cuenta una vez.
@@ -1561,15 +1561,16 @@ function FinishedSummary({ match, onReopen }) {
   );
 }
 
-function ScoreButton({ name, score, onAdd, onSubtract, color }) {
+function ScoreButton({ name, score, onAdd, onSubtract, color, maxNameLength }) {
   const t = colorTokens(color);
-  // Texto del equipo CENTRADO y más grande que antes:
+  // Tamaño calculado sobre el nombre más largo de los dos equipos para
+  // mantener simetría. Si no se pasa, cae al propio (compat).
   //   <=12 chars  →  16px (text-base)
   //   <=18 chars  →  14px (text-sm)
   //   >18 chars   →  13px
-  // line-clamp-2 limita a 2 líneas máximo para nombres patológicos.
-  const nameSize = name.length > 18 ? 'text-[13px]'
-                 : name.length > 12 ? 'text-sm'
+  const len = maxNameLength ?? name.length;
+  const nameSize = len > 18 ? 'text-[13px]'
+                 : len > 12 ? 'text-sm'
                  : 'text-base';
   return (
     <div className="rounded-2xl overflow-hidden shadow-card-md flex flex-col">
