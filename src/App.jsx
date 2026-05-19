@@ -656,6 +656,7 @@ function MatchView({ matchId }) {
   const [syncing, setSyncing] = useState(false);
   const [toast, setToast] = useState(null);
   const [editingLineup, setEditingLineup] = useState(false);
+  const [quickSubIdx, setQuickSubIdx] = useState(null); // null | 0..3 — posición sobre la que se quiere sustituir directamente
   const [rotationFlash, setRotationFlash] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false);
   const inflight = useRef(false);
@@ -836,7 +837,7 @@ function MatchView({ matchId }) {
       </div>
 
       {tab === 'score' && <ScoreTab match={match} onPoint={handleAddPoint} onSubtract={handleSubtract} onReopen={() => setConfirmReopen(true)} onEnd={handleEnd} />}
-      {tab === 'rotation' && <RotationTab match={match} flash={rotationFlash} onRotate={handleRotate} onEditLineup={() => setEditingLineup(true)} />}
+      {tab === 'rotation' && <RotationTab match={match} flash={rotationFlash} onRotate={handleRotate} onEditLineup={() => setEditingLineup(true)} onCellClick={(idx) => setQuickSubIdx(idx)} />}
 
       <div className="px-5 mt-2"><ShareButton match={match} /></div>
 
@@ -846,6 +847,40 @@ function MatchView({ matchId }) {
           bench={match.bench || []}
           onSave={handleSaveRoster}
           onClose={() => setEditingLineup(false)}
+        />
+      )}
+
+      {quickSubIdx !== null && (
+        <QuickSubModal
+          positionIdx={quickSubIdx}
+          positions={match.positions}
+          bench={match.bench || []}
+          onClose={() => setQuickSubIdx(null)}
+          onSubstitute={async (incoming) => {
+            // Ejecuta la sustitución y persiste a BD. Cierra el modal al
+            // terminar. Mismo principio que el RosterModal en v1.5.0.
+            const newPositions = match.positions.map((p, i) =>
+              i === quickSubIdx ? { ...incoming } : { ...(p || {}) }
+            );
+            const newBench = (match.bench || []).filter(
+              (b) => !(b.name === incoming.name && b.number === incoming.number)
+            );
+            const outgoing = match.positions[quickSubIdx];
+            if (outgoing?.name?.trim()) newBench.push({ ...outgoing });
+            const persistedPositions = newPositions.map((p, i) => ({
+              ...(p || {}),
+              name: ((p && p.name) || '').trim() || POSITION_SHORT[i],
+            }));
+            const persistedBench = newBench
+              .map((p) => ({ ...p, name: (p.name || '').trim() }))
+              .filter((p) => p.name);
+            setQuickSubIdx(null);
+            await handleSaveRoster(persistedPositions, persistedBench, { keepOpen: true });
+          }}
+          onOpenFullPanel={() => {
+            setQuickSubIdx(null);
+            setEditingLineup(true);
+          }}
         />
       )}
 
@@ -1041,7 +1076,7 @@ function ScoreNumber({ score, accent }) {
   );
 }
 
-function RotationTab({ match, flash, onRotate, onEditLineup }) {
+function RotationTab({ match, flash, onRotate, onEditLineup, onCellClick }) {
   const pos = match.positions || [];
   const isServingA = match.server === 'A' && !match.finished;
   const streak = isServingA ? (match.serveStreak || 0) : 0;
@@ -1057,15 +1092,15 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
         <div className="grid grid-cols-3 gap-2">
           {/* Fila 1: solo P3 centro */}
           <div />
-          <CourtCell player={pos[2]} index={2} />
+          <CourtCell player={pos[2]} index={2} onClick={onCellClick ? () => onCellClick(2) : undefined} />
           <div />
           {/* Fila 2: P2 izquierda, vacío, P4 derecha */}
-          <CourtCell player={pos[1]} index={1} />
+          <CourtCell player={pos[1]} index={1} onClick={onCellClick ? () => onCellClick(1) : undefined} />
           <div className="flex items-center justify-center text-[15px] text-slate-400 font-medium">CAMPO</div>
-          <CourtCell player={pos[3]} index={3} />
+          <CourtCell player={pos[3]} index={3} onClick={onCellClick ? () => onCellClick(3) : undefined} />
           {/* Fila 3: solo P1 saque */}
           <div />
-          <CourtCell player={pos[0]} index={0} isServer={isServingA} />
+          <CourtCell player={pos[0]} index={0} isServer={isServingA} onClick={onCellClick ? () => onCellClick(0) : undefined} />
           <div />
         </div>
         {isServingA && streak > 0 && (
@@ -1074,6 +1109,9 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
             {streak >= 3 && <span className="ml-1 text-red-500">· al próximo punto rota</span>}
           </div>
         )}
+        <div className="mt-2 text-center text-[12px] text-slate-500">
+          Toca a una jugadora para sustituirla
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-3">
@@ -1091,10 +1129,12 @@ function RotationTab({ match, flash, onRotate, onEditLineup }) {
   );
 }
 
-function CourtCell({ player, index, isServer = false }) {
+function CourtCell({ player, index, isServer = false, onClick }) {
   const label = POSITION_LABELS[index];
-  return (
-    <div className={`aspect-square rounded-2xl flex flex-col items-center justify-center px-1.5 py-2 shadow-card transition ${isServer ? 'bg-gradient-to-br from-brand-green to-brand-green-dark text-white' : 'bg-white border border-slate-200'}`}>
+  const clickable = typeof onClick === 'function';
+  const baseClass = `aspect-square rounded-2xl flex flex-col items-center justify-center px-1.5 py-2 shadow-card transition ${isServer ? 'bg-gradient-to-br from-brand-green to-brand-green-dark text-white' : 'bg-white border border-slate-200'} ${clickable ? 'cursor-pointer active:scale-95 active:shadow-card-md' : ''}`;
+  const inner = (
+    <>
       <div className={`text-[15px] font-mono font-bold leading-none ${isServer ? 'text-white/85' : 'text-brand-green'}`}>
         {POSITION_SHORT[index]}{isServer && ' 🏐'}
       </div>
@@ -1112,8 +1152,16 @@ function CourtCell({ player, index, isServer = false }) {
       <div className={`text-[13px] font-medium leading-none mt-1 ${isServer ? 'text-white/80' : 'text-brand-green/70'}`}>
         {label}
       </div>
-    </div>
+    </>
   );
+  if (clickable) {
+    return (
+      <button type="button" onClick={onClick} aria-label={`Sustituir ${player?.name || POSITION_SHORT[index]}`} className={baseClass}>
+        {inner}
+      </button>
+    );
+  }
+  return <div className={baseClass}>{inner}</div>;
 }
 
 // ============ MODAL CONFIRMACIÓN genérico ============
@@ -1132,6 +1180,76 @@ function ConfirmModal({ title, message, confirmText, cancelText = 'Cancelar', va
           </button>
           <button onClick={onConfirm} className={`p-3 text-white rounded-xl font-semibold shadow-card ${confirmClass}`}>
             {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ QUICK SUB MODAL ============
+// Modal compacto que se abre al tocar una jugadora en el campo (RotationTab).
+// Muestra "Sale: [Nombre]" y la lista de suplentes del banquillo. Al pulsar
+// uno, se sustituye al instante. Tiene también un botón para abrir el modal
+// Plantilla completa si el padre necesita renombrar, añadir suplentes, etc.
+function QuickSubModal({ positionIdx, positions, bench, onSubstitute, onClose, onOpenFullPanel }) {
+  const outgoing = positions?.[positionIdx];
+  const benchAvailable = (bench || []).filter((p) => p?.name?.trim());
+  const label = POSITION_LABELS[positionIdx];
+  const shortLabel = POSITION_SHORT[positionIdx];
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl p-5 w-full max-w-md shadow-card-lg animate-in max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-bold flex items-center gap-2 text-slate-900">
+            <RotateCw size={20} className="text-brand-green" /> Sustituir
+          </h3>
+          <button onClick={onClose} className="text-slate-400 p-1" aria-label="Cerrar"><X size={20} /></button>
+        </div>
+
+        <div className="mb-4 p-3 bg-brand-green-soft border border-brand-green/20 rounded-2xl">
+          <div className="text-[11px] uppercase tracking-wider text-brand-green-dark/70 font-bold mb-1">Sale</div>
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-slate-900 text-base">{outgoing?.name || '—'}</span>
+            {outgoing?.number != null && (
+              <span className="font-mono text-brand-green-dark text-sm">#{outgoing.number}</span>
+            )}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">{label} ({shortLabel})</div>
+        </div>
+
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold mb-2">Entra desde el banquillo</div>
+
+        {benchAvailable.length === 0 ? (
+          <div className="text-center py-6 text-sm text-slate-500">
+            No hay suplentes en el banquillo.
+            <div className="mt-3">
+              <button onClick={onOpenFullPanel} className="px-4 py-2 bg-brand-green text-white rounded-xl text-sm font-semibold">
+                Abrir Plantilla para añadir
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2 mb-4">
+            {benchAvailable.map((p, i) => (
+              <button
+                key={`${p.name}-${p.number ?? i}`}
+                onClick={() => onSubstitute(p)}
+                className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-left font-medium hover:border-brand-green hover:bg-brand-green-soft/40 transition flex items-center justify-between active:scale-[0.99]"
+              >
+                <span className="truncate">{p.name}</span>
+                {p.number != null && <span className="font-mono text-brand-green text-sm flex-shrink-0 ml-2">#{p.number}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <button onClick={onClose} className="p-3 bg-slate-100 text-slate-700 rounded-xl font-medium">
+            Cancelar
+          </button>
+          <button onClick={onOpenFullPanel} className="p-3 bg-white border border-brand-green/30 text-brand-green-dark rounded-xl font-medium flex items-center justify-center gap-2">
+            <Users size={16} /> Plantilla
           </button>
         </div>
       </div>
