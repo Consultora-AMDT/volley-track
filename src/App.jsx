@@ -787,10 +787,10 @@ function SetupView({ userId }) {
       </button>
       <h1 className="text-2xl font-bold mb-6 text-slate-900">Nuevo partido</h1>
 
-      <Field label="Equipo local">
+      <Field label="Equipo local" count={{ current: teamA.length, max: LIMITS.teamNameMax }}>
         <input value={teamA} onChange={(e) => setTeamA(e.target.value)} maxLength={LIMITS.teamNameMax} placeholder="Ej. Santa Ana y San Rafael" className="w-full p-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
       </Field>
-      <Field label="Equipo visitante">
+      <Field label="Equipo visitante" count={{ current: teamB.length, max: LIMITS.teamNameMax }}>
         <input value={teamB} onChange={(e) => setTeamB(e.target.value)} maxLength={LIMITS.teamNameMax} placeholder="Ej. CV Pozuelo" className="w-full p-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition" />
       </Field>
       <Field label="Lugar (opcional)">
@@ -1110,8 +1110,32 @@ function RosterPickerModal({ title, options, onPick, onClose }) {
   );
 }
 
-function Field({ label, children }) {
-  return <div className="mb-5"><label className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wide">{label}</label>{children}</div>;
+function Field({ label, children, hint, count }) {
+  // `hint` muestra un texto auxiliar bajo el input (gris).
+  // `count` es un objeto {current, max} para mostrar contador X/N. Se
+  // pone en amarillo cuando current >= 80% del max para avisar al
+  // usuario que se esta acercando al limite, y en rojo cuando llega al
+  // tope (current === max).
+  let counterClass = 'text-slate-400';
+  if (count) {
+    const ratio = count.current / count.max;
+    if (count.current === count.max) counterClass = 'text-red-500 font-semibold';
+    else if (ratio >= 0.8) counterClass = 'text-amber-600 font-medium';
+  }
+  return (
+    <div className="mb-5">
+      <div className="flex items-baseline justify-between mb-2">
+        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">{label}</label>
+        {count && (
+          <span className={`text-xs tabular-nums ${counterClass}`}>
+            {count.current}/{count.max}
+          </span>
+        )}
+      </div>
+      {children}
+      {hint && <div className="text-xs text-slate-500 mt-1.5">{hint}</div>}
+    </div>
+  );
 }
 function SelectBtn({ active, onClick, children, variant = 'green' }) {
   const activeClass = variant === 'blue'
