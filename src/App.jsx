@@ -666,6 +666,26 @@ function MatchView({ matchId }) {
 
   useEffect(() => { trackVisited(matchId); }, [matchId]);
 
+  // Al entrar a un partido, forzar el scroll de la página al top. El navegador
+  // a veces restaura una posición anterior (por ejemplo si el usuario ya había
+  // visitado este match y scrolleado) y la cabecera sticky deja los botones
+  // de PUNTO medio tapados al volver. Desactivamos restoration automática y
+  // hacemos scroll explícito al top tanto al cambiar matchId como cuando el
+  // match termina de cargar (loading pasa de true a false) y cuando se cambia
+  // de tab (Marcador ↔ Rotación) para garantizar que cada vista empiece arriba.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+    // Doble llamada con requestAnimationFrame para cubrir el caso de que
+    // el browser intente restaurar el scroll después del primer paint.
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(() => window.scrollTo(0, 0));
+    }
+  }, [matchId, loading, tab]);
+
   // Detectar cuando se proclama un ganador (winner pasa de null a 'A'/'B')
   // para mostrar un toast grande de celebración. El partido NO se cierra;
   // sigue activo para que en el cole jueguen el set extra "de entrenamiento".
