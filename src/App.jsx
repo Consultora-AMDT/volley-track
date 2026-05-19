@@ -51,7 +51,7 @@ function useNow(active) {
   return now;
 }
 
-// Detecta rotación cíclica horaria con 4 jugadoras:
+// Detecta rotación cíclica horaria con 4 jugadores/as:
 //   prev = [P1, P2, P3, P4]  ->  curr = [P4, P1, P2, P3]
 function isCyclicRotation(prev, curr) {
   if (!prev || !curr || prev.length !== 4 || curr.length !== 4) return false;
@@ -357,11 +357,11 @@ function SetupView({ userId }) {
   const canStart = teamA.trim() && teamB.trim() && !creating;
   // La plantilla del cole está SIEMPRE activa (esta app es del Santa Ana).
   // Los slots de titular y banquillo se muestran como selectores que abren
-  // el RosterPickerModal con la lista de jugadoras.
+  // el RosterPickerModal con la lista de jugadores/as.
   const rosterLoaded = true;
 
-  // Devuelve las jugadoras de la plantilla del cole que aún no están en
-  // titulares ni en banquillo. Solo para "añadir suplente" — la jugadora
+  // Devuelve las jugadores/as de la plantilla del cole que aún no están en
+  // titulares ni en banquillo. Solo para "añadir suplente" — la jugador/a
   // tiene que estar realmente libre.
   const availableFromRoster = () => {
     const usedNames = new Set();
@@ -418,7 +418,7 @@ function SetupView({ userId }) {
     const { _source, ...clean } = pickedPlayer;
     if (picker.scope === 'starter') {
       const ns = [...starters];
-      // Si la jugadora estaba en banquillo, sácala
+      // Si la jugador/a estaba en banquillo, sácala
       setBench(bench.filter(
         (b) => !(b.name === clean.name && b.number === clean.number)
       ));
@@ -504,7 +504,7 @@ function SetupView({ userId }) {
       <div className="mb-5 p-3 bg-brand-green-soft border border-brand-green/20 rounded-2xl flex items-center justify-between gap-2">
         <div className="text-sm">
           <div className="font-bold text-brand-green-dark">Plantilla del cole</div>
-          <div className="text-xs text-slate-600">11 jugadoras del Santa Ana y San Rafael</div>
+          <div className="text-xs text-slate-600">11 jugadores/as del Santa Ana y San Rafael</div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
           <button onClick={loadRoster} className="px-3 py-2 bg-brand-green text-white rounded-xl text-xs font-bold shadow-card">Cargar</button>
@@ -534,7 +534,7 @@ function SetupView({ userId }) {
                         {p.number != null && <span className="ml-2 text-brand-green font-mono text-sm">#{p.number}</span>}
                       </>
                     ) : (
-                      `Elegir jugadora ${POSITION_LABELS[i].toLowerCase()}`
+                      `Elegir jugador/a ${POSITION_LABELS[i].toLowerCase()}`
                     )}
                   </span>
                   <ChevronLeft size={16} className="rotate-180 text-slate-400 flex-shrink-0 ml-2" />
@@ -548,7 +548,7 @@ function SetupView({ userId }) {
                     setStarters(np);
                   }}
                   maxLength={LIMITS.playerNameMax}
-                  placeholder={`Jugadora ${POSITION_LABELS[i].toLowerCase()}`}
+                  placeholder={`Jugador/a ${POSITION_LABELS[i].toLowerCase()}`}
                   className="flex-1 p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 shadow-card transition"
                 />
               )}
@@ -629,7 +629,7 @@ function SetupView({ userId }) {
   );
 }
 
-// Modal genérico que muestra la plantilla del cole para elegir una jugadora.
+// Modal genérico que muestra la plantilla del cole para elegir una jugador/a.
 // Cada opción puede llevar un campo _source: 'bench' (está actualmente en
 // banquillo → al elegirla se hace swap con la titular saliente) o 'free'
 // (sin asignar → entra directamente como titular). Se muestra un badge
@@ -643,7 +643,7 @@ function RosterPickerModal({ title, options, onPick, onClose }) {
           <button onClick={onClose} className="text-slate-400 p-1"><X size={20} /></button>
         </div>
         {options.length === 0 ? (
-          <p className="text-sm text-slate-500 text-center py-8">No quedan jugadoras disponibles en la plantilla del cole.</p>
+          <p className="text-sm text-slate-500 text-center py-8">No quedan jugadores/as disponibles en la plantilla del cole.</p>
         ) : (
           <div className="space-y-2">
             {options.map((p) => (
@@ -1219,7 +1219,7 @@ function RotationTab({ match, flash, onRotate, onEditLineup, onCellClick }) {
           </div>
         )}
         <div className="mt-2 text-center text-[12px] text-slate-500">
-          Toca a una jugadora para sustituirla
+          Toca a un/a jugador/a para sustituirlo/a
         </div>
       </div>
 
@@ -1297,7 +1297,7 @@ function ConfirmModal({ title, message, confirmText, cancelText = 'Cancelar', va
 }
 
 // ============ QUICK SUB MODAL ============
-// Modal compacto que se abre al tocar una jugadora en el campo (RotationTab).
+// Modal compacto que se abre al tocar una jugador/a en el campo (RotationTab).
 // Muestra "Sale: [Nombre]" y la lista de suplentes del banquillo. Al pulsar
 // uno, se sustituye al instante. Tiene también un botón para abrir el modal
 // Plantilla completa si el padre necesita renombrar, añadir suplentes, etc.
@@ -1367,7 +1367,7 @@ function QuickSubModal({ positionIdx, positions, bench, onSubstitute, onClose, o
 }
 
 // ============ MODAL PLANTILLA con sustituciones ============
-// Si las jugadoras vienen con dorsales (plantilla del cole cargada), activa
+// Si las jugadores/as vienen con dorsales (plantilla del cole cargada), activa
 // los selectores tipo dropdown. Si no, fallback a inputs editables.
 function RosterModal({ positions, bench, onSave, onClose }) {
   const [court, setCourt] = useState(() => positions.map((p) => ({ ...(p || {}) })));
@@ -1376,11 +1376,11 @@ function RosterModal({ positions, bench, onSave, onClose }) {
   const [renamingIdx, setRenamingIdx] = useState(null);
   const [picker, setPicker] = useState(null);
   // La plantilla del cole está SIEMPRE activa: los slots son selectores que
-  // abren el RosterPickerModal con la lista de jugadoras del Santa Ana.
+  // abren el RosterPickerModal con la lista de jugadores/as del Santa Ana.
   const rosterLoaded = true;
 
-  // Jugadoras del cole no usadas ni en campo ni en banquillo.
-  // Solo para "añadir suplente" — la jugadora debe estar libre.
+  // Jugadores/as del cole no usadas ni en campo ni en banquillo.
+  // Solo para "añadir suplente" — la jugador/a debe estar libre.
   const availableFromRoster = () => {
     const usedNames = new Set();
     [...court, ...benchList].forEach((p) => {

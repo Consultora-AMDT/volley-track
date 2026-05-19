@@ -157,7 +157,7 @@ export async function dedupeMatchSets(matchId) {
 // En array: [pos[3], pos[0], pos[1], pos[2]]
 export async function rotatePositions(matchId, currentPositions) {
   if (!currentPositions || currentPositions.length !== 4) {
-    throw new Error('Se esperan 4 jugadoras en campo');
+    throw new Error('Se esperan 4 jugadores/as en campo');
   }
   const rotated = [currentPositions[3], currentPositions[0], currentPositions[1], currentPositions[2]];
   const { data, error } = await supabase
