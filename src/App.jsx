@@ -879,7 +879,19 @@ function MatchView({ matchId }) {
       {tab === 'score' && <ScoreTab match={match} onPoint={handleAddPoint} onSubtract={handleSubtract} onReopen={() => setConfirmReopen(true)} onEnd={handleEnd} />}
       {tab === 'rotation' && <RotationTab match={match} flash={rotationFlash} onRotate={handleRotate} onEditLineup={() => setEditingLineup(true)} onCellClick={(idx) => setQuickSubIdx(idx)} />}
 
+      {/* Botones de acción del partido, intercambiados respecto a versiones
+          previas: ahora Compartir va ARRIBA (donde antes estaba "Finalizar
+          manualmente") y Finalizar va ABAJO (donde antes estaba Compartir).
+          Ambos aparecen en cualquier tab. Finalizar solo cuando el match
+          sigue abierto. */}
       <div className="px-5 mt-2"><ShareButton match={match} /></div>
+      {!match.finished && (
+        <div className="px-5 mt-2">
+          <button onClick={handleEnd} className="w-full p-3 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-sm font-medium shadow-card transition">
+            Finalizar partido manualmente
+          </button>
+        </div>
+      )}
 
       {editingLineup && (
         <RosterModal
@@ -994,11 +1006,12 @@ function ScoreTab({ match, onPoint, onSubtract, onReopen, onEnd }) {
           <p className="text-[16px] text-slate-500 text-center mb-4 px-4 leading-relaxed">
             Si varios padres pulsan el mismo punto en menos de 10s, solo cuenta una vez.
           </p>
-          <button onClick={onEnd} className="w-full p-3 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-sm font-medium shadow-card transition">
-            Finalizar partido manualmente
-          </button>
         </>
       )}
+
+      {/* ShareButton + Finalizar se han movido a MatchView para que aparezcan
+          también en la tab Rotación. ShareButton va arriba (intercambiado con
+          Finalizar que va abajo). */}
 
       {uniqueSetsByNumber(match.sets).length > 0 && !match.finished && (
         <div className="mt-8">
