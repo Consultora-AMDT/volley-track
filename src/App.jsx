@@ -660,6 +660,7 @@ function SetupView({ userId }) {
   const [teamA, setTeamA] = useState('');
   const [teamB, setTeamB] = useState('');
   const [format, setFormat] = useState('bo3'); // BO3 por defecto (infantil)
+  const [setTarget, setSetTarget] = useState(25); // Puntos para cerrar set: 12, 15 o 25
   const [location, setLocation] = useState('');
   const [firstServe, setFirstServe] = useState('A');
   // 4 titulares + suplentes: cada uno {name, number?}
@@ -802,6 +803,7 @@ function SetupView({ userId }) {
         teamA: teamA.trim(),
         teamB: teamB.trim(),
         format,
+        setTarget,
         location: location.trim(),
         firstServe,
         positions,
@@ -836,6 +838,13 @@ function SetupView({ userId }) {
         <div className="grid grid-cols-2 gap-2">
           <SelectBtn active={format === 'bo3'} onClick={() => setFormat('bo3')}>Al mejor de 3</SelectBtn>
           <SelectBtn active={format === 'bo5'} onClick={() => setFormat('bo5')}>Al mejor de 5</SelectBtn>
+        </div>
+      </Field>
+      <Field label="Puntos del set" hint="Cada set se cierra al alcanzar estos puntos con ventaja de 2.">
+        <div className="grid grid-cols-3 gap-2">
+          <SelectBtn active={setTarget === 12} onClick={() => setSetTarget(12)}>12 puntos</SelectBtn>
+          <SelectBtn active={setTarget === 15} onClick={() => setSetTarget(15)}>15 puntos</SelectBtn>
+          <SelectBtn active={setTarget === 25} onClick={() => setSetTarget(25)}>25 puntos</SelectBtn>
         </div>
       </Field>
       <Field label="Saque inicial">
@@ -1479,7 +1488,7 @@ function MatchView({ matchId }) {
           </button>
           <div className="flex items-center gap-2">
             <span className="text-[16px] text-slate-500 uppercase tracking-wider font-bold">
-              Set {match.currentSet.number} · {match.format === 'bo5' ? 'BO5' : 'BO3'}
+              Set {match.currentSet.number} · {match.format === 'bo5' ? 'BO5' : 'BO3'} · {match.setTarget ?? 25} pts
             </span>
             {syncing && <Wifi size={12} className="text-brand-green pulse-live" />}
             {!match.finished && (
