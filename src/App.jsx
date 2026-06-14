@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import {
-  Trophy, Users, RotateCw, Plus, Minus, ChevronLeft, Home, History, Play,
+  Trophy, Users, RotateCw, Plus, Minus, ChevronLeft, ChevronRight, Home, History, Play,
   Wifi, WifiOff, AlertTriangle, Edit3, Check, X, CheckCircle2, Clock, Trash2,
   Share2, Copy,
 } from 'lucide-react';
@@ -115,6 +115,49 @@ function uniqueSetsByNumber(sets) {
     if (s && s.number != null) byNumber.set(s.number, s);
   }
   return Array.from(byNumber.values()).sort((a, b) => a.number - b.number);
+}
+
+// ============ TEMPORADAS ============
+//
+// La temporada deportiva española va del 1 de julio al 30 de junio del año
+// siguiente. Es decir, "Temporada 25/26" cubre desde el 1 jul 2025 hasta
+// el 30 jun 2026 (ambos incluidos).
+//
+// Esta función recibe una fecha y devuelve un objeto con la temporada a
+// la que pertenece. Usado para agrupar partidos en la lista de "Mis
+// partidos" en carpetas tipo "Temporada 25/26", "Temporada 26/27", etc.
+function getSeason(date) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = d.getMonth(); // 0=enero ... 6=julio ... 11=diciembre
+  // Si estamos en julio (mes 6) o después → temporada que EMPIEZA este año.
+  // Si estamos en enero-junio (mes < 6) → temporada que empezó el año anterior.
+  const startYear = month >= 6 ? year : year - 1;
+  const endYear = startYear + 1;
+  return {
+    key: `${startYear}-${endYear}`,
+    label: `${String(startYear).slice(-2).padStart(2, '0')}/${String(endYear).slice(-2).padStart(2, '0')}`,
+    startYear,
+    endYear,
+  };
+}
+
+// Agrupa una lista de partidos por temporada y devuelve un array de
+// grupos ordenado descendentemente (más reciente primero). Usa
+// `startedAt` como fecha de referencia; si no, cae a `createdAt`.
+function groupMatchesBySeason(matches) {
+  const groups = new Map();
+  for (const m of matches) {
+    const ref = m.startedAt || m.createdAt;
+    if (!ref) continue;
+    const season = getSeason(ref);
+    if (!groups.has(season.key)) {
+      groups.set(season.key, { ...season, matches: [] });
+    }
+    groups.get(season.key).matches.push(m);
+  }
+  // Más reciente primero
+  return Array.from(groups.values()).sort((a, b) => b.startYear - a.startYear);
 }
 
 // ============ APP ============
@@ -2429,6 +2472,49 @@ function RosterModal({ positions, bench, onSave, onClose }) {
 
 
 // ============ HISTORY ============
+// Carpeta colapsable de temporada. Muestra el header con icono 📁, nombre
+// de la temporada y nº de partidos. Al pulsarlo, expande/colapsa la lista.
+// La temporada actual (la primera del array, más reciente) se renderiza
+// expandida por defecto; las anteriores cerradas para no abrumar al
+// usuario con histórico extenso.
+function SeasonFolder({ season, defaultOpen, userId, onMatchClick, onMatchDelete }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const count = season.matches.length;
+  return (
+    <div className="mb-3 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between p-4 hover:bg-slate-50 active:bg-slate-100 transition"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="text-2xl select-none" aria-hidden="true">📁</div>
+          <div className="text-left min-w-0">
+            <div className="font-bold text-slate-900 truncate">Temporada {season.label}</div>
+            <div className="text-xs text-slate-500">{count} {count === 1 ? 'partido' : 'partidos'}</div>
+          </div>
+        </div>
+        <ChevronRight
+          size={20}
+          className={`text-slate-400 transition-transform shrink-0 ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+      {open && (
+        <div className="p-3 pt-1 border-t border-slate-100">
+          {season.matches.map((m) => (
+            <MatchCard
+              key={m.id}
+              match={m}
+              userId={userId}
+              onClick={() => onMatchClick(m)}
+              onDelete={onMatchDelete}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HistoryView({ userId }) {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2493,12 +2579,15 @@ function HistoryView({ userId }) {
           )}
           {finished.length > 0 && (
             <div>
-              <h2 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3">Finalizados</h2>
-              {finished.map((m) => (
-                <MatchCard
-                  key={m.id} match={m} userId={userId}
-                  onClick={() => navigate(`#/match/${m.id}`)}
-                  onDelete={(match) => setConfirmDelete({ match })}
+              <h2 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-3">Por temporada</h2>
+              {groupMatchesBySeason(finished).map((season, idx) => (
+                <SeasonFolder
+                  key={season.key}
+                  season={season}
+                  defaultOpen={idx === 0}
+                  userId={userId}
+                  onMatchClick={(m) => navigate(`#/match/${m.id}`)}
+                  onMatchDelete={(match) => setConfirmDelete({ match })}
                 />
               ))}
             </div>
